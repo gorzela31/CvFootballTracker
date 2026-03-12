@@ -1,0 +1,24 @@
+# --- Core Data & Math ---
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# --- Computer Vision ---
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# --- Deep Learning & Detection (YOLO) ---
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+
+# --- SoccerNet Official Package ---
+SoccerNet>=0.1.50
+
+# --- Visualization & Metrics ---
+matplotlib>=3.7.0
+scikit-learn>=1.2.0
+
+# --- Notebooks Support ---
+jupyter>=1.0.0
+ipykernel>=6.0.0
