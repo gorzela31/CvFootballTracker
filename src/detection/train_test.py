@@ -1,46 +1,55 @@
+"""
+Plik: train_test.py
+Opis: Skrypt walidacyjny sluzacy do weryfikacji poprawnosci potoku 
+przetwarzania danych. Uruchamia skrocony proces uczenia modelu na 
+lokalnych zasobach obliczeniowych (CPU) w celu potwierdzenia 
+integralnosci plikow konfiguracyjnych YAML oraz etykiet YOLO.
+"""
+
 import os
 from ultralytics import YOLO
 
+def create_dataset_config(dataset_dir, yaml_path):
+    """Generuje plik data.yaml niezbędny do zainicjowania procesu uczenia."""
+    content = f"""
+path: {dataset_dir}
+train: train.txt
+val: valid.txt
+test: test.txt
+
+names:
+  0: ball
+  1: team_left
+  2: team_right
+  3: referee
+"""
+    os.makedirs(dataset_dir, exist_ok=True)
+    with open(yaml_path, 'w', encoding='utf-8') as f:
+        f.write(content.strip())
+
 def main():
-    # 1. Ścieżki absolutne (żeby YOLO się nie zgubiło)
     project_root = os.getcwd()
-    dataset_dir = os.path.join(project_root, "data", "yolo_dataset")
+    dataset_dir = os.path.join(project_root, "data", "tracking_dataset", "yoloformat")
     yaml_path = os.path.join(dataset_dir, "data.yaml")
 
-    # 2. Dynamiczne tworzenie pliku data.yaml
-    # Na razie jako zbiór treningowy i walidacyjny podajemy to samo (bo mamy tylko 1 klip testowy)
-    yaml_content = f"""
-path: {dataset_dir}
-train: images/train
-val: images/train
+    create_dataset_config(dataset_dir, yaml_path)
 
-# Tymczasowo uczymy model wykrywać wszystkie obiekty jako jedną klasę
-nc: 1
-names: ['object']
-"""
-    with open(yaml_path, 'w', encoding='utf-8') as f:
-        f.write(yaml_content)
-    
-    print(f"✅ Utworzono plik konfiguracyjny: {yaml_path}")
-
-    # 3. Inicjalizacja modelu YOLO
-    # Pobieramy najmniejszy i najszybszy model (Nano), idealny do testów na CPU
-    print("⏳ Pobieranie wag modelu YOLOv8n...")
+    # Inicjalizacja bazowego modelu YOLO (wersja Nano dla optymalizacji zasobow)
     model = YOLO("yolov8n.pt") 
 
-    # 4. Uruchomienie treningu
-    print("🔥 Rozpoczynamy testowy trening na CPU (1 epoka)...")
-    results = model.train(
-        data=yaml_path,
-        epochs=1,          # Tylko 1 epoka, żeby zobaczyć czy działa
-        imgsz=640,         # Rozdzielczość, do której YOLO przeskaluje zdjęcia
-        device='cpu',      # Wymuszamy CPU, skoro lokalnie nie masz GPU
-        batch=4,           # Mały batch size, żeby nie zapchać RAMu
-        project="results", # Gdzie zapisać wyniki
-        name="yolo_test_run" # Nazwa folderu z wynikami
-    )
-    
-    print("✅ Trening zakończony! Sprawdź folder results/yolo_test_run/")
+    # Uruchomienie testowej iteracji uczenia
+    try:
+        model.train(
+            data=yaml_path,
+            epochs=1,
+            imgsz=640,
+            device='cpu',
+            batch=2,
+            project="results",
+            name="environment_verification"
+        )
+    except Exception as e:
+        print(f"Wystapil blad krytyczny podczas testu srodowiska: {e}")
 
 if __name__ == "__main__":
     main()

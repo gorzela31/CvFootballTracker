@@ -107,6 +107,28 @@ def process_all_splits(base_path, output_path, config):
             else:
                 print(f"Pominiecie - brak folderu: {clip_path}")
 
+def generate_yolo_lists(output_path):
+    """
+    Generuje pliki .txt z listami absolutnych sciezek do obrazow dla kazdego podzialu.
+    Umozliwia to YOLO poprawne odczytanie danych przy strukturze wielofolderowej.
+    """
+    splits = ['train', 'valid', 'test']
+    for split in splits:
+        split_dir = Path(output_path) / split
+        if not split_dir.exists():
+            continue
+            
+        image_paths = []
+        for path in split_dir.rglob('*.jpg'):
+            if 'images' in path.parts:
+                image_paths.append(str(path.absolute()))
+        
+        if image_paths:
+            list_file = Path(output_path) / f"{split}.txt"
+            with open(list_file, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(image_paths))
+            print(f"Wygenerowano liste: {list_file}")
+
 if __name__ == "__main__":
     SOURCE_DATA = "data/tracking_dataset/tracking"
     YOLO_DATA = "data/tracking_dataset/yoloformat"
@@ -119,5 +141,10 @@ if __name__ == "__main__":
         "test":  ["SNMOT-116", "SNMOT-117"]
     }
 
+    # 1. Konwersja adnotacji i kopiowanie obrazow
     process_all_splits(SOURCE_DATA, YOLO_DATA, processing_config)
+    
+    # 2. Generowanie list sciezrek dla frameworka YOLO
+    generate_yolo_lists(YOLO_DATA)
+
     print("Proces zakonczony sukcesem.")
