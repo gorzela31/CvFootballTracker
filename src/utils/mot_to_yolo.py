@@ -1,89 +1,123 @@
+"""
+Plik: mot_to_yolo.py
+Opis: Skrypt konwertujacy zbior danych z formatu MOT (SoccerNet) do formatu YOLO.
+Obsluguje podzialy: train, valid, test. Generuje strukture katalogow:
+yoloformat/[split]/[clip_name]/images oraz labels.
+Automatycznie mapuje klasy na podstawie plikow gameinfo.ini.
+"""
+
 import os
 import cv2
 import shutil
+from pathlib import Path
 
-def convert_soccernet_to_yolo(sn_clip_path, output_base_dir):
-    img_dir = os.path.join(sn_clip_path, "img1")
-    gt_path = os.path.join(sn_clip_path, "gt", "gt.txt")
+def get_class_mapping(gameinfo_path):
+    # Parsuje plik gameinfo.ini i zwraca mapowanie {tracklet_id: class_id}
+    mapping = {}
+    if not os.path.exists(gameinfo_path):
+        return mapping
     
-    if os.path.exists(output_base_dir):
-        print("🧹 Usuwanie starego folderu i plików cache...")
-        shutil.rmtree(output_base_dir)
+    with open(gameinfo_path, 'r') as f:
+        for line in f:
+            if "trackletID_" in line:
+                parts = line.strip().split('=')
+                tid = int(parts[0].split('_')[1])
+                desc = parts[1].lower()
+                
+                if 'ball' in desc:
+                    cid = 0
+                elif 'team left' in desc:
+                    cid = 1
+                elif 'team right' in desc:
+                    cid = 2
+                elif 'referee' in desc:
+                    cid = 3
+                else:
+                    cid = 0
+                mapping[tid] = cid
+    return mapping
+
+def convert_clip(clip_source_path, output_base_dir, split_name):
+    clip_name = os.path.basename(clip_source_path)
+    target_dir = Path(output_base_dir) / split_name / clip_name
+    img_target = target_dir / "images"
+    lbl_target = target_dir / "labels"
+    
+    img_target.mkdir(parents=True, exist_ok=True)
+    lbl_target.mkdir(parents=True, exist_ok=True)
+    
+    img_src_dir = os.path.join(clip_source_path, "img1")
+    gt_path = os.path.join(clip_source_path, "gt", "gt.txt")
+    gameinfo_path = os.path.join(clip_source_path, "gameinfo.ini")
+    
+    if not os.path.exists(gt_path):
+        return
+
+    class_map = get_class_mapping(gameinfo_path)
+    
+    # Pobranie wymiarow z pierwszego dostepnego zdjecia
+    images_list = sorted(os.listdir(img_src_dir))
+    if not images_list:
+        return
         
-    yolo_images_dir = os.path.join(output_base_dir, "images", "train")
-    yolo_labels_dir = os.path.join(output_base_dir, "labels", "train")
-    
-    os.makedirs(yolo_images_dir, exist_ok=True)
-    os.makedirs(yolo_labels_dir, exist_ok=True)
-
-    first_img_name = os.listdir(img_dir)[0]
-    sample_img = cv2.imread(os.path.join(img_dir, first_img_name))
-    img_height, img_width, _ = sample_img.shape
+    sample = cv2.imread(os.path.join(img_src_dir, images_list[0]))
+    h_img, w_img, _ = sample.shape
 
     with open(gt_path, 'r') as f:
         lines = f.readlines()
 
-    frame_annotations = {}
-    skipped_boxes = 0 
-    
+    frame_data = {}
     for line in lines:
-        parts = line.strip().split(',')
-        frame_id = int(parts[0])
+        p = line.strip().split(',')
+        if len(p) < 6: continue
+        fid, tid = int(p[0]), int(p[1])
+        x, y, w, h = float(p[2]), float(p[3]), float(p[4]), float(p[5])
         
-        # Prawdziwe współrzędne 2 punktów ramki
-        x1 = float(parts[2])
-        y1 = float(parts[3])
-        w = float(parts[4])
-        h = float(parts[5])
+        cid = class_map.get(tid, 0)
         
-        x2 = x1 + w
-        y2 = y1 + h
+        xc = (x + w/2) / w_img
+        yc = (y + h/2) / h_img
+        wn = w / w_img
+        hn = h / h_img
         
-        # Bezpieczne przycinanie ramek, jeśli wystają poza obraz
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(img_width, x2)
-        y2 = min(img_height, y2)
-        
-        w = x2 - x1
-        h = y2 - y1
+        yolo_line = f"{cid} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}\n"
+        if fid not in frame_data: 
+            frame_data[fid] = []
+        frame_data[fid].append(yolo_line)
 
-        if w <= 0 or h <= 0:
-            skipped_boxes += 1
-            continue
-
-        # ROZWIĄZANIE PROBLEMU: Wymuszamy klasę 0 ("obiekt"), bo SoccerNet trzyma
-        # prawdziwe etykiety w gameinfo.ini, a w gt.txt wpisuje bezużyteczne "-1".
-        class_id = 0
-
-        # Normalizacja YOLO
-        x_center = (x1 + w / 2) / img_width
-        y_center = (y1 + h / 2) / img_height
-        norm_w = w / img_width
-        norm_h = h / img_height
+    print(f"Konwersja klipu: {split_name}/{clip_name}")
+    for fid, annots in frame_data.items():
+        img_name = f"{fid:06d}.jpg"
+        txt_name = f"{fid:06d}.txt"
         
-        yolo_line = f"{class_id} {x_center:.6f} {y_center:.6f} {norm_w:.6f} {norm_h:.6f}\n"
-        
-        if frame_id not in frame_annotations:
-            frame_annotations[frame_id] = []
-        frame_annotations[frame_id].append(yolo_line)
+        src_img_path = os.path.join(img_src_dir, img_name)
+        if os.path.exists(src_img_path):
+            shutil.copy(src_img_path, img_target / img_name)
+            with open(lbl_target / txt_name, 'w') as f:
+                f.writelines(annots)
 
-    print(f"Rozpoczynam konwersję (odrzucono {skipped_boxes} ramek poza krawędzią ekranu)...")
-    
-    for frame_id, annots in frame_annotations.items():
-        base_name = f"{frame_id:06d}"
-        src_img = os.path.join(img_dir, f"{base_name}.jpg")
-        dst_img = os.path.join(yolo_images_dir, f"{sn_clip_path[-9:]}_{base_name}.jpg") 
-        dst_txt = os.path.join(yolo_labels_dir, f"{sn_clip_path[-9:]}_{base_name}.txt")
-        
-        if os.path.exists(src_img):
-            shutil.copy(src_img, dst_img)
-            with open(dst_txt, 'w') as f_out:
-                f_out.writelines(annots)
-
-    print(f"✅ Konwersja zakończona! Skopiowano i przetworzono {len(frame_annotations)} klatek.")
+def process_all_splits(base_path, output_path, config):
+    # Przetwarza wskazane podzialy i foldery zgodnie z konfiguracja
+    for split, folders in config.items():
+        print(f"Rozpoczynanie przetwarzania sekcji: {split}")
+        for folder in folders:
+            clip_path = os.path.join(base_path, split, folder)
+            if os.path.exists(clip_path):
+                convert_clip(clip_path, output_path, split)
+            else:
+                print(f"Pominiecie - brak folderu: {clip_path}")
 
 if __name__ == "__main__":
-    SOURCE_CLIP = "data/tracking_dataset/tracking/train/SNMOT-060"
-    OUTPUT_YOLO_DATASET = "data/yolo_dataset"
-    convert_soccernet_to_yolo(SOURCE_CLIP, OUTPUT_YOLO_DATASET)
+    SOURCE_DATA = "data/tracking_dataset/tracking"
+    YOLO_DATA = "data/tracking_dataset/yoloformat"
+    
+    # Konfiguracja: wybierz foldery dla kazdego podzialu
+    # Mozesz wpisac nazwy recznie lub uzyc listdir dla wszystkich
+    processing_config = {
+        "train": ["SNMOT-060", "SNMOT-061"],
+        "valid": ["SNMOT-160", "SNMOT-161"],
+        "test":  ["SNMOT-116", "SNMOT-117"]
+    }
+
+    process_all_splits(SOURCE_DATA, YOLO_DATA, processing_config)
+    print("Proces zakonczony sukcesem.")

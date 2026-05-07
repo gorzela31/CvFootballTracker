@@ -1,3 +1,18 @@
+"""
+Plik: download_tracking.py
+Opis: Skrypt do pobierania danych 'tracking' z bazy SoccerNet dla treningu modeli detekcji i śledzenia.
+Funkcjonalność:
+  - Pobiera wybrane splity danych (train, test) z SoccerNet
+  - Zapisuje dane do folderu data/tracking_dataset/tracking/
+  - Każdy klip zawiera: klatki wideo (img1/), adnotacje MOT (gt/), metadane (gameinfo.ini)
+Bezpieczeństwo:
+  - Domyślnie nic nie pobiera - trzeba odkomentować wybrane splity w kodzie
+  - Wymaga zainstalowanego pakietu SoccerNet (pip install SoccerNet)
+Użycie:
+  1. Odkomentuj żądane splity w liście splits_to_download
+  2. Uruchom: python scripts/download_tracking.py
+"""
+
 import os
 from SoccerNet.Downloader import SoccerNetDownloader
 
@@ -21,14 +36,14 @@ def main():
     # aby wybrać, które zbiory chcesz teraz pobrać.
     # ==========================================================
     splits_to_download = [
-        # "train",  # Zbiór treningowy (ok. 50-60 folderów)
-        # "challenge",  # Zbiór walidacyjny (do testowania w trakcie nauki w Colabie) <- nie istnieje w tym zadaniu.
-        # "test",   # Zbiór testowy (do ostatecznej oceny modelu na koniec)
+        # "train",  # Zbiór treningowy
+        # "challenge",  # Zbiór walidacyjny
+        # "test",   # Zbiór testowy
     ]
     
     # Zabezpieczenie przed odpaleniem "pustego" skryptu
     if not splits_to_download:
-        print("\n⚠️ UWAGA: Nic nie wybrano!")
+        print("\n UWAGA: Nic nie wybrano!")
         print("Musisz odkomentować przynajmniej jeden zbiór (train, valid lub test) w kodzie skryptu.")
         return
 
