@@ -213,3 +213,10 @@ __marimo__/
 results/
 *.mp4
 *.avi
+
+# Ignoruj wszystkie pliki modeli
+models/**/*.pt
+
+# Wyjątki modeli
+!models/yolov8n/yolov8n.pt
+!models/yolov8n/trained_detection_yolov8n.pt
