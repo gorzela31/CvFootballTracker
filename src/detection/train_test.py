@@ -35,7 +35,8 @@ def main():
     create_dataset_config(dataset_dir, yaml_path)
 
     # Inicjalizacja bazowego modelu YOLO (wersja Nano dla optymalizacji zasobow)
-    model = YOLO("yolov8n.pt") 
+    base_model_path = os.path.join(project_root, "models", "yolov8n", "yolov8n.pt")
+    model = YOLO(base_model_path)
 
     # Uruchomienie testowej iteracji uczenia
     try:
