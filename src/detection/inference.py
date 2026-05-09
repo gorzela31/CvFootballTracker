@@ -15,8 +15,8 @@ def generate_test_video():
     # 1. Konfiguracja sciezek projektowych
     project_root = os.getcwd()
     model_path = os.path.join(project_root, "models", "yolov8n", "trained_detection_yolov8n.pt")
-    frames_dir = os.path.join(project_root, "data", "tracking_dataset", "tracking", "train", "SNMOT-060", "img1")
-    output_video = os.path.join(project_root, "results", "test_inference_output.mp4")
+    frames_dir = os.path.join(project_root, "data", "tracking_dataset", "tracking", "test", "SNMOT-123", "img1")
+    output_video = os.path.join(project_root, "results", "tracking_test_output_1.mp4")
     
     # Tworzenie katalogu wynikowego, jesli nie istnieje
     os.makedirs("results", exist_ok=True)

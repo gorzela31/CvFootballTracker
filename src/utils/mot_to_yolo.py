@@ -107,27 +107,33 @@ def process_all_splits(base_path, output_path, config):
             else:
                 print(f"Pominiecie - brak folderu: {clip_path}")
 
-def generate_yolo_lists(output_path):
-    """
-    Generuje pliki .txt z listami absolutnych sciezek do obrazow dla kazdego podzialu.
-    Umozliwia to YOLO poprawne odczytanie danych przy strukturze wielofolderowej.
-    """
-    splits = ['train', 'valid', 'test']
-    for split in splits:
-        split_dir = Path(output_path) / split
-        if not split_dir.exists():
-            continue
+# def generate_yolo_lists(output_path):
+#     """
+#     Generuje pliki .txt z listami relatywnych sciezek do obrazow dla kazdego podzialu.
+#     Umozliwia to YOLO poprawne odczytanie danych niezaleznie od srodowiska (lokalnie Windows vs Colab Linux).
+#     """
+#     splits = ['train', 'valid', 'test']
+#     base_dir = Path(output_path)
+    
+#     for split in splits:
+#         split_dir = base_dir / split
+#         if not split_dir.exists():
+#             continue
             
-        image_paths = []
-        for path in split_dir.rglob('*.jpg'):
-            if 'images' in path.parts:
-                image_paths.append(str(path.absolute()))
+#         image_paths = []
+#         for path in split_dir.rglob('*.jpg'):
+#             if 'images' in path.parts:
+#                 # 1. Tworzenie sciezki relatywnej wzgledem folderu yoloformat
+#                 rel_path = path.relative_to(base_dir)
+                
+#                 # 2. Konwersja na standard POSIX (ukosniki '/' zamiast '\')
+#                 image_paths.append(rel_path.as_posix())
         
-        if image_paths:
-            list_file = Path(output_path) / f"{split}.txt"
-            with open(list_file, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(image_paths))
-            print(f"Wygenerowano liste: {list_file}")
+#         if image_paths:
+#             list_file = base_dir / f"{split}.txt"
+#             with open(list_file, 'w', encoding='utf-8') as f:
+#                 f.write('\n'.join(image_paths))
+#             print(f"Wygenerowano liste ze sciezkami relatywnymi: {list_file}")
 
 if __name__ == "__main__":
     SOURCE_DATA = "data/tracking_dataset/tracking"
@@ -136,15 +142,15 @@ if __name__ == "__main__":
     # Konfiguracja: wybierz foldery dla kazdego podzialu
     # Mozesz wpisac nazwy recznie lub uzyc listdir dla wszystkich
     processing_config = {
-        "train": ["SNMOT-060", "SNMOT-061"],
-        "valid": ["SNMOT-160", "SNMOT-161"],
-        "test":  ["SNMOT-116", "SNMOT-117"]
+        "train": [f for f in os.listdir(os.path.join(SOURCE_DATA, "train")) if os.path.isdir(os.path.join(SOURCE_DATA, "train", f))],
+        "valid": [f for f in os.listdir(os.path.join(SOURCE_DATA, "valid")) if os.path.isdir(os.path.join(SOURCE_DATA, "valid", f))],
+        "test":  []
     }
 
     # 1. Konwersja adnotacji i kopiowanie obrazow
     process_all_splits(SOURCE_DATA, YOLO_DATA, processing_config)
     
-    # 2. Generowanie list sciezrek dla frameworka YOLO
-    generate_yolo_lists(YOLO_DATA)
+    # # 2. Generowanie list sciezrek dla frameworka YOLO
+    # generate_yolo_lists(YOLO_DATA)
 
     print("Proces zakonczony sukcesem.")

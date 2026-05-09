@@ -13,14 +13,14 @@ def create_dataset_config(dataset_dir, yaml_path):
     """Generuje plik data.yaml niezbędny do zainicjowania procesu uczenia."""
     content = f"""
 path: {dataset_dir}
-train: train.txt
-val: valid.txt
-test: test.txt
+train: train
+val: valid
+test: test
 
 names:
   0: ball
-  1: team_left
-  2: team_right
+  1: team_1
+  2: team_2
   3: referee
 """
     os.makedirs(dataset_dir, exist_ok=True)
