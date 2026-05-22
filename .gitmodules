@@ -1,0 +1,3 @@
+[submodule "src/calibration/tvcalib"]
+	path = src/calibration/tvcalib
+	url = https://github.com/MM4SPA/tvcalib.git
