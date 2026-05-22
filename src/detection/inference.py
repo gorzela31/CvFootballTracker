@@ -14,9 +14,9 @@ from ultralytics import YOLO
 def generate_test_video():
     # 1. Konfiguracja sciezek projektowych
     project_root = os.getcwd()
-    model_path = os.path.join(project_root, "models", "yolov8n", "trained_detection_yolov8n.pt")
+    model_path = os.path.join(project_root, "models", "yolov8n", "best.pt")
     frames_dir = os.path.join(project_root, "data", "tracking_dataset", "tracking", "test", "SNMOT-123", "img1")
-    output_video = os.path.join(project_root, "results", "tracking_test_output_1.mp4")
+    output_video = os.path.join(project_root, "results", "tracking_test_output_2.mp4")
     
     # Tworzenie katalogu wynikowego, jesli nie istnieje
     os.makedirs("results", exist_ok=True)
@@ -47,7 +47,7 @@ def generate_test_video():
         
         # Wykonanie predykcji z ustalonym progiem ufnosci (confidence threshold)
         # verbose=False ogranicza nadmiarowe logowanie w konsoli
-        results = model.predict(source=img_path, conf=0.25, verbose=False)
+        results = model.predict(source=img_path, conf=0.5, verbose=False)
         
         # Generowanie obrazu z naniesionymi wynikami detekcji (bounding boxy)
         annotated_frame = results[0].plot(
