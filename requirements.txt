@@ -22,3 +22,12 @@ scikit-learn>=1.2.0
 # --- Notebooks Support ---
 jupyter>=1.0.0
 ipykernel>=6.0.0
+
+# --- Camera Calibration (TVCalib dependencies) ---
+kornia
+pytorch-lightning
+tabulate
+seaborn
+
+#--- Tracking ---
+supervision>=0.18.0
