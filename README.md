@@ -30,15 +30,19 @@ Data is sourced from the SoccerNet dataset. Two specific subsets are used:
 The project is designed for a hybrid workflow: local development for source code and Google Colab for GPU-intensive training.
 
 ```text
-├── data/                   # Git-ignored: Raw datasets and annotations
-├── notebooks/              # Jupyter notebooks for Google Colab execution
-├── src/                    
-│   ├── detection/          # Object detection models and inference logic
-│   ├── tracking/           # MOT algorithms integration
-│   ├── calibration/        # Homography and pitch projection math
-│   └── utils/              # Data parsers, visualization scripts
 ├── configs/                # Model hyperparameters (.yaml)
+├── data/                   # Git-ignored: Raw datasets and annotations
+├── models/                 # trained weights of models (.pt)
+├── notebooks/              # Jupyter notebooks for Google Colab execution
+├── pipelines/              # Ready E2E run scripts
 ├── scripts/                # CLI entry points for pipeline execution
-├── results/                # Git-ignored: Model weights (.pt) and output media
+├── src/  
+│   ├── calibration/        # Homography and pitch projection math                  
+│   ├── detection/          # Object detection models and inference logic
+│   ├── tracking/           # tracking algorithms integration
+│   └── utils/              # Data parsers
+│   └── visualization/      # Drawing of pitch and minimap
+├── results/                # Git-ignored: output media
+├── opis_pracy.md           # Thesis requirements
 ├── requirements.txt        # Python dependencies
 └── .gitignore
