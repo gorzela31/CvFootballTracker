@@ -4,6 +4,17 @@ Opis: Skrypt konwertujacy zbior danych z formatu MOT (SoccerNet) do formatu YOLO
 Obsluguje podzialy: train, valid, test. Generuje strukture katalogow:
 yoloformat/[split]/[clip_name]/images oraz labels.
 Automatycznie mapuje klasy na podstawie plikow gameinfo.ini.
+
+Klasy wyjsciowe (3):
+  0: ball
+  1: player    (player + goalkeeper, obie druzyny)
+  2: referee   (main + side referee)
+Tracklety nie pasujace do zadnej kategorii (np. "other") sa pomijane.
+
+Subsampling klatek:
+  Kazdy klip ma 750 klatek (25 fps, 30 sekund). Sasiednie klatki sa mocno
+  skorelowane, wiec dla traina bierzemy co N-ta klatke. Walidacja i test
+  pozostaja w pelnej rozdzielczosci dla rzetelnej oceny.
 """
 
 import os
@@ -11,30 +22,43 @@ import cv2
 import shutil
 from pathlib import Path
 
+# Co ile klatek pobierac probki dla kazdego podzialu.
+# 1 = wszystkie klatki, 3 = co trzecia (250 z 750), 5 = co piata (150 z 750).
+FRAME_STRIDE = {
+    "train": 3,
+    "valid": 1,
+    "test":  1,
+}
+
 def get_class_mapping(gameinfo_path):
-    # Parsuje plik gameinfo.ini i zwraca mapowanie {tracklet_id: class_id}
+    """
+    Parsuje plik gameinfo.ini i zwraca mapowanie {tracklet_id: class_id}.
+    Wartosc None oznacza tracklet do pominiecia (np. "other").
+    """
     mapping = {}
     if not os.path.exists(gameinfo_path):
         return mapping
-    
+
     with open(gameinfo_path, 'r') as f:
         for line in f:
-            if "trackletID_" in line:
-                parts = line.strip().split('=')
-                tid = int(parts[0].split('_')[1])
-                desc = parts[1].lower()
-                
-                if 'ball' in desc:
-                    cid = 0
-                elif 'team left' in desc:
-                    cid = 1
-                elif 'team right' in desc:
-                    cid = 2
-                elif 'referee' in desc:
-                    cid = 3
-                else:
-                    cid = 0
-                mapping[tid] = cid
+            if "trackletID_" not in line:
+                continue
+            parts = line.strip().split('=')
+            tid = int(parts[0].split('_')[1])
+            desc = parts[1].lower()
+
+            if 'ball' in desc:
+                cid = 0
+            elif 'player' in desc or 'goalkeeper' in desc:
+                # obejmuje "player team left/right" oraz
+                # "goalkeeper team left/right" i niespojna forme "goalkeepers"
+                cid = 1
+            elif 'referee' in desc:
+                # obejmuje "main", "side top", "side bottom"
+                cid = 2
+            else:
+                cid = None
+            mapping[tid] = cid
     return mapping
 
 def convert_clip(clip_source_path, output_base_dir, split_name):
@@ -42,54 +66,71 @@ def convert_clip(clip_source_path, output_base_dir, split_name):
     target_dir = Path(output_base_dir) / split_name / clip_name
     img_target = target_dir / "images"
     lbl_target = target_dir / "labels"
-    
+
     img_target.mkdir(parents=True, exist_ok=True)
     lbl_target.mkdir(parents=True, exist_ok=True)
-    
+
     img_src_dir = os.path.join(clip_source_path, "img1")
     gt_path = os.path.join(clip_source_path, "gt", "gt.txt")
     gameinfo_path = os.path.join(clip_source_path, "gameinfo.ini")
-    
+
     if not os.path.exists(gt_path):
         return
 
     class_map = get_class_mapping(gameinfo_path)
-    
+    stride = FRAME_STRIDE.get(split_name, 1)
+
     # Pobranie wymiarow z pierwszego dostepnego zdjecia
     images_list = sorted(os.listdir(img_src_dir))
     if not images_list:
         return
-        
+
     sample = cv2.imread(os.path.join(img_src_dir, images_list[0]))
+    if sample is None:
+        print(f"OSTRZEZENIE: nie udalo sie wczytac {images_list[0]} w {clip_name}")
+        return
     h_img, w_img, _ = sample.shape
 
     with open(gt_path, 'r') as f:
         lines = f.readlines()
 
     frame_data = {}
+    skipped_unknown = 0
     for line in lines:
         p = line.strip().split(',')
-        if len(p) < 6: continue
+        if len(p) < 6:
+            continue
         fid, tid = int(p[0]), int(p[1])
+
+        # Subsampling: bierzemy tylko klatki spelniajace warunek stride
+        # (fid w SoccerNet zaczyna sie od 1, wiec uzywamy ((fid-1) % stride))
+        if (fid - 1) % stride != 0:
+            continue
+
         x, y, w, h = float(p[2]), float(p[3]), float(p[4]), float(p[5])
-        
-        cid = class_map.get(tid, 0)
-        
+
+        cid = class_map.get(tid)
+        if cid is None:
+            skipped_unknown += 1
+            continue
+
         xc = (x + w/2) / w_img
         yc = (y + h/2) / h_img
         wn = w / w_img
         hn = h / h_img
-        
+
         yolo_line = f"{cid} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}\n"
-        if fid not in frame_data: 
+        if fid not in frame_data:
             frame_data[fid] = []
         frame_data[fid].append(yolo_line)
 
-    print(f"Konwersja klipu: {split_name}/{clip_name}")
+    print(f"Konwersja klipu: {split_name}/{clip_name} "
+          f"(stride={stride}, klatek={len(frame_data)}, pominiete tracklety={skipped_unknown})")
+
     for fid, annots in frame_data.items():
         img_name = f"{fid:06d}.jpg"
         txt_name = f"{fid:06d}.txt"
-        
+
         src_img_path = os.path.join(img_src_dir, img_name)
         if os.path.exists(src_img_path):
             shutil.copy(src_img_path, img_target / img_name)
@@ -99,7 +140,7 @@ def convert_clip(clip_source_path, output_base_dir, split_name):
 def process_all_splits(base_path, output_path, config):
     # Przetwarza wskazane podzialy i foldery zgodnie z konfiguracja
     for split, folders in config.items():
-        print(f"Rozpoczynanie przetwarzania sekcji: {split}")
+        print(f"\n=== Sekcja: {split} (stride={FRAME_STRIDE.get(split, 1)}) ===")
         for folder in folders:
             clip_path = os.path.join(base_path, split, folder)
             if os.path.exists(clip_path):
@@ -107,50 +148,18 @@ def process_all_splits(base_path, output_path, config):
             else:
                 print(f"Pominiecie - brak folderu: {clip_path}")
 
-# def generate_yolo_lists(output_path):
-#     """
-#     Generuje pliki .txt z listami relatywnych sciezek do obrazow dla kazdego podzialu.
-#     Umozliwia to YOLO poprawne odczytanie danych niezaleznie od srodowiska (lokalnie Windows vs Colab Linux).
-#     """
-#     splits = ['train', 'valid', 'test']
-#     base_dir = Path(output_path)
-    
-#     for split in splits:
-#         split_dir = base_dir / split
-#         if not split_dir.exists():
-#             continue
-            
-#         image_paths = []
-#         for path in split_dir.rglob('*.jpg'):
-#             if 'images' in path.parts:
-#                 # 1. Tworzenie sciezki relatywnej wzgledem folderu yoloformat
-#                 rel_path = path.relative_to(base_dir)
-                
-#                 # 2. Konwersja na standard POSIX (ukosniki '/' zamiast '\')
-#                 image_paths.append(rel_path.as_posix())
-        
-#         if image_paths:
-#             list_file = base_dir / f"{split}.txt"
-#             with open(list_file, 'w', encoding='utf-8') as f:
-#                 f.write('\n'.join(image_paths))
-#             print(f"Wygenerowano liste ze sciezkami relatywnymi: {list_file}")
-
 if __name__ == "__main__":
     SOURCE_DATA = "data/tracking_dataset/tracking"
     YOLO_DATA = "data/tracking_dataset/yoloformat"
-    
+
     # Konfiguracja: wybierz foldery dla kazdego podzialu
-    # Mozesz wpisac nazwy recznie lub uzyc listdir dla wszystkich
     processing_config = {
         "train": [f for f in os.listdir(os.path.join(SOURCE_DATA, "train")) if os.path.isdir(os.path.join(SOURCE_DATA, "train", f))],
         "valid": [f for f in os.listdir(os.path.join(SOURCE_DATA, "valid")) if os.path.isdir(os.path.join(SOURCE_DATA, "valid", f))],
         "test":  []
     }
 
-    # 1. Konwersja adnotacji i kopiowanie obrazow
+    # Konwersja adnotacji i kopiowanie obrazow
     process_all_splits(SOURCE_DATA, YOLO_DATA, processing_config)
-    
-    # # 2. Generowanie list sciezrek dla frameworka YOLO
-    # generate_yolo_lists(YOLO_DATA)
 
-    print("Proces zakonczony sukcesem.")
+    print("\nProces zakonczony sukcesem.")
