@@ -15,9 +15,10 @@ The system is evaluated using the [SoccerNet](https://www.soccer-net.org/) datab
 
 The processing pipeline consists of three main stages:
 
-1. **Detection:** Locating players, referees, and the ball. The project compares different object detection architectures, primarily focusing on YOLO (v8/v10) and RT-DETR.
-2. **Multi-Object Tracking (MOT):** Maintaining consistent player IDs across video frames. Methods evaluated include ByteTrack and BoT-SORT, with a focus on handling severe occlusions.
-3. **Pitch Localization:** Detecting pitch keypoints and lines to calculate a homography matrix. This transformation maps the bottom-center of player bounding boxes (feet contact points) to a standard 2D pitch coordinate system.
+1. **Detection:** Locating players, referees, and the ball. The project compares two object detection architectures: YOLOv8n and Faster R-CNN (ResNet50-FPN v2).
+2. **Multi-Object Tracking (MOT):** Maintaining consistent player IDs across video frames using ByteTrack.
+3. **Team Classification:** Assigning players to teams based on jersey color using K-means clustering in HSV color space.
+4. **Pitch Localization:** Detecting pitch keypoints and lines to calculate a homography matrix. The project compares two approaches: TVCalib (neural) and classical homography (manual line correspondences). This transformation maps the bottom-center of player bounding boxes (feet contact points) to a standard 2D pitch coordinate system.
 
 ## Dataset
 
@@ -30,19 +31,19 @@ Data is sourced from the SoccerNet dataset. Two specific subsets are used:
 The project is designed for a hybrid workflow: local development for source code and Google Colab for GPU-intensive training.
 
 ```text
-├── configs/                # Model hyperparameters (.yaml)
 ├── data/                   # Git-ignored: Raw datasets and annotations
-├── models/                 # trained weights of models (.pt)
-├── notebooks/              # Jupyter notebooks for Google Colab execution
-├── pipelines/              # Ready E2E run scripts
-├── scripts/                # CLI entry points for pipeline execution
-├── src/  
-│   ├── calibration/        # Homography and pitch projection math                  
-│   ├── detection/          # Object detection models and inference logic
-│   ├── tracking/           # tracking algorithms integration
-│   └── utils/              # Data parsers
-│   └── visualization/      # Drawing of pitch and minimap
-├── results/                # Git-ignored: output media
+├── models/                 # Wagi modeli (.pt)
+├── notebooks/              # Notebooki treningowe (Colab) – YOLOv8n, Faster R-CNN
+├── pipelines/              # Gotowe pipeline'y E2E (4 kombinacje: detektor × kalibracja)
+├── scripts/                # Skrypty pomocnicze (pobieranie danych SoccerNet)
+├── src/
+│   ├── calibration/        # Homografia: TVCalib (neuronowa) + klasyczna
+│   ├── classification/     # Klasyfikacja drużyn (K-means na kolorze koszulek)
+│   ├── detection/          # Detektory: YOLOv8n, Faster R-CNN – inferencja i trening
+│   ├── tracking/           # Śledzenie obiektów (ByteTrack)
+│   ├── utils/              # Konwersja danych, wizualizacja GT
+│   └── visualization/      # Rysowanie minimapki i boiska 2D
+├── results/                # Git-ignored: wyjściowe wideo i CSV
 ├── opis_pracy.md           # Thesis requirements
 ├── requirements.txt        # Python dependencies
 └── .gitignore
