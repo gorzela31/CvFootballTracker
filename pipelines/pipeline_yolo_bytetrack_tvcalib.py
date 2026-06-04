@@ -59,6 +59,7 @@ CALIB_STRIDE = 5   # co ile klatek liczona homografia
                     # 1   = kazda klatka (najdokladniejsza projekcja)
                     # 25  = co sekunde przy 25 fps
                     # 750 = tylko pierwsza klatka (najszybsze przetwarzanie)
+OPTIM_STEPS = 500 # liczba krokow optymalizacji TVCalib (im wiecej, tym dokladniejsza ale wolniejsza kalibracja)
 
 # Mapowanie klas (zgodne z modelem)
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
@@ -134,6 +135,7 @@ def run_pipeline():
         model_weights=str(TVCALIB_WEIGHTS),
         image_width=w,
         image_height=h,
+        optim_steps=OPTIM_STEPS,
     )
 
     # ---- 4. Plan kalibracji (rekalibracja dzieje sie w glownej petli) ----

@@ -59,7 +59,8 @@ TVCALIB_WEIGHTS = PROJECT_ROOT / "src" / "calibration" / "tvcalib" / "data" / "s
 
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 5
+CALIB_STRIDE = 5 # co ile klatek rekalibrowac homografie TVCalib (im mniejszy, tym bardziej odporny na dryft ale wolniejszy pipeline)
+OPTIM_STEPS = 500 # liczba krokow optymalizacji TVCalib (im wiecej, tym dokladniejsza ale wolniejsza kalibracja)
 
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
 MINIMAP_WIDTH_PX = 500
@@ -148,6 +149,7 @@ def run_pipeline(
         model_weights=str(tvcalib_weights),
         image_width=w,
         image_height=h,
+        optim_steps=OPTIM_STEPS,
     )
 
     # ---- 4. Plan kalibracji ----
