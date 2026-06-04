@@ -20,6 +20,7 @@ Opis:
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +35,7 @@ from ultralytics import YOLO
 from src.calibration.classical_homography import ClassicalHomography
 from src.tracking.bytetrack_tracker import ByteTrackTracker
 from src.visualization.minimap import MinimapRenderer
+from src.classification.team_classifier import TeamClassifier, annotate_frame_with_teams
 
 
 # ==========================================================================
@@ -47,8 +49,9 @@ YOLO_WEIGHTS = PROJECT_ROOT / "models" / "yolov8n" / "trained_detection_yolov8n.
 
 # Sciezki wyjsciowe
 OUTPUT_DIR = PROJECT_ROOT / "results" / RUN_NAME
-OUTPUT_VIDEO = OUTPUT_DIR / "output.mp4"
-OUTPUT_CSV = OUTPUT_DIR / "tracks.csv"
+_TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+OUTPUT_VIDEO = OUTPUT_DIR / f"{_TS}_output.mp4"
+OUTPUT_CSV = OUTPUT_DIR / f"{_TS}_tracks.csv"
 
 # Parametry przetwarzania
 CONF_THRESHOLD = 0.10
@@ -139,8 +142,8 @@ def run_pipeline():
 
     # ---- 5. Inicjalizacja trackera, anotatorow i minimapy ----
     tracker = ByteTrackTracker(frame_rate=FPS)
-    box_annotator = sv.BoxAnnotator(thickness=1)
-    label_annotator = sv.LabelAnnotator(text_scale=0.4, text_thickness=1)
+
+    team_classifier = TeamClassifier()
 
     minimap_renderer = MinimapRenderer(width_px=MINIMAP_WIDTH_PX)
 
@@ -184,8 +187,13 @@ def run_pipeline():
         # Tracking
         detections = tracker.update(detections)
 
+        # Klasyfikacja druzyn
+        team_ids = team_classifier.classify(frame, detections)
+
         # Projekcja na boisko (tylko jesli H dostepna)
         dets_dict = sv_detections_to_dict_list(detections)
+        for i, d in enumerate(dets_dict):
+            d["team_id"] = int(team_ids[i])
         if H is not None:
             dets_projected = calibrator.project_detections_to_pitch(dets_dict, H)
         else:
@@ -205,12 +213,11 @@ def run_pipeline():
                 "bbox_y2": d["bbox"][3],
                 "pitch_x_m": pitch[0] if pitch else None,
                 "pitch_y_m": pitch[1] if pitch else None,
+                "team_id": d.get("team_id", -1),
             })
 
         # Anotacja klatki
-        labels = build_annotation_labels(detections)
-        annotated = box_annotator.annotate(frame.copy(), detections=detections)
-        annotated = label_annotator.annotate(annotated, detections=detections, labels=labels)
+        annotated = annotate_frame_with_teams(frame, detections, team_ids, CLASS_NAMES)
 
         # Minimapa
         minimap = minimap_renderer.render(

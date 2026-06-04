@@ -78,8 +78,9 @@ class MinimapRenderer:
             if pitch_coords is None:
                 continue
             class_name = self.class_names.get(d.get("class"), "unknown")
+            team_id = d.get("team_id", -1)
             x_m, y_m = pitch_coords
-            self.pitch.draw_object(canvas, x_m, y_m, class_name, radius_px=5)
+            self.pitch.draw_object(canvas, x_m, y_m, class_name, radius_px=5, team_id=team_id)
 
         if self.show_frame_info and frame_idx is not None:
             self._draw_frame_info(canvas, frame_idx, total_frames)
@@ -126,7 +127,8 @@ class MinimapRenderer:
         w = canvas.shape[1]
         items = [
             ("ball",    self.pitch.COLOR_BALL),
-            ("player",  self.pitch.COLOR_PLAYER),
+            ("team A",  self.pitch.COLOR_TEAM_A),
+            ("team B",  self.pitch.COLOR_TEAM_B),
             ("referee", self.pitch.COLOR_REFEREE),
         ]
         x0 = w - 90

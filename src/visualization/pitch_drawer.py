@@ -46,6 +46,8 @@ class PitchRenderer:
     COLOR_LINES    = (230, 230, 230)  # linie (off-white, mniej harsh niz pure)
     COLOR_BALL     = (255, 255, 255)  # bialy
     COLOR_PLAYER   = (255, 200, 0)    # cyjan        (#00c8ff)
+    COLOR_TEAM_A   = (255, 80, 50)    # niebieski    (team 0)
+    COLOR_TEAM_B   = (80, 50, 255)    # czerwony     (team 1)
     COLOR_REFEREE  = (0, 140, 255)    # pomaranczowy (#ff8c00)
     COLOR_TEXT     = (200, 200, 200)  # meta info (frame counter, legenda)
 
@@ -157,14 +159,15 @@ class PitchRenderer:
         )
 
     def _draw_corner_arcs(self, canvas: np.ndarray) -> None:
-        """Rysuje 4 male luki naroznikow boiska."""
+        """Rysuje 4 male luki naroznikow boiska (do wnetrza boiska)."""
         r = max(3, int(CORNER_ARC_R * self.scale_x))
-        # (x_m, y_m, start_angle, end_angle) wg konwencji OpenCV
+        # m_to_px: X rośnie w prawo, Y rośnie w dół (Y_m=+34 -> dol obrazu)
+        # Luki musza isc do wnetrza boiska:
         corners = [
-            (-PITCH_LENGTH_M / 2, +PITCH_WIDTH_M / 2,   0,  90),  # gorny lewy
-            (+PITCH_LENGTH_M / 2, +PITCH_WIDTH_M / 2,  90, 180),  # gorny prawy
-            (+PITCH_LENGTH_M / 2, -PITCH_WIDTH_M / 2, 180, 270),  # dolny prawy
-            (-PITCH_LENGTH_M / 2, -PITCH_WIDTH_M / 2, 270, 360),  # dolny lewy
+            (-PITCH_LENGTH_M / 2, -PITCH_WIDTH_M / 2,   0,  90),  # gorny lewy (px) -> w prawo+dol
+            (+PITCH_LENGTH_M / 2, -PITCH_WIDTH_M / 2,  90, 180),  # gorny prawy (px) -> w lewo+dol
+            (+PITCH_LENGTH_M / 2, +PITCH_WIDTH_M / 2, 180, 270),  # dolny prawy (px) -> w lewo+gore
+            (-PITCH_LENGTH_M / 2, +PITCH_WIDTH_M / 2, 270, 360),  # dolny lewy (px) -> w prawo+gore
         ]
         for x_m, y_m, s, e in corners:
             cv2.ellipse(
@@ -172,7 +175,11 @@ class PitchRenderer:
                 s, e, self.COLOR_LINES, self.line_thickness,
             )
 
-    def get_class_color(self, class_name: str) -> tuple:
+    def get_class_color(self, class_name: str, team_id: int = -1) -> tuple:
+        if class_name == "player" and team_id == 0:
+            return self.COLOR_TEAM_A
+        if class_name == "player" and team_id == 1:
+            return self.COLOR_TEAM_B
         return {
             "ball":    self.COLOR_BALL,
             "player":  self.COLOR_PLAYER,
@@ -186,9 +193,10 @@ class PitchRenderer:
         y_m: float,
         class_name: str,
         radius_px: int = 5,
+        team_id: int = -1,
     ) -> None:
         """Rysuje pojedynczy obiekt na minimapie."""
-        color = self.get_class_color(class_name)
+        color = self.get_class_color(class_name, team_id)
         c = self.m_to_px(x_m, y_m)
 
         if class_name == "ball":

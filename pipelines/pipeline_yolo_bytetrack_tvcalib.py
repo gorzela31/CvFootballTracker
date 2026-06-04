@@ -20,6 +20,7 @@ Opis:
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Dodaj root projektu do PYTHONPATH zeby importy 'src.*' dzialaly
@@ -35,6 +36,7 @@ from ultralytics import YOLO
 from src.calibration.homography import TVCalibHomography
 from src.tracking.bytetrack_tracker import ByteTrackTracker
 from src.visualization.minimap import MinimapRenderer
+from src.classification.team_classifier import TeamClassifier, annotate_frame_with_teams
 
 
 # ==========================================================================
@@ -49,13 +51,14 @@ TVCALIB_WEIGHTS = PROJECT_ROOT / "src" / "calibration" / "tvcalib" / "data" / "s
 
 # Sciezki wyjsciowe
 OUTPUT_DIR = PROJECT_ROOT / "results" / RUN_NAME
-OUTPUT_VIDEO = OUTPUT_DIR / "output.mp4"
-OUTPUT_CSV = OUTPUT_DIR / "tracks.csv"
+_TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+OUTPUT_VIDEO = OUTPUT_DIR / f"{_TS}_output.mp4"
+OUTPUT_CSV = OUTPUT_DIR / f"{_TS}_tracks.csv"
 
 # Parametry przetwarzania
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 5   # co ile klatek liczona homografia
+CALIB_STRIDE = 10   # co ile klatek liczona homografia
                     # 1   = kazda klatka (najdokladniejsza projekcja)
                     # 25  = co sekunde przy 25 fps
                     # 750 = tylko pierwsza klatka (najszybsze przetwarzanie)
@@ -145,8 +148,8 @@ def run_pipeline():
 
     # ---- 5. Inicjalizacja trackera, anotatorow i renderera minimapy ----
     tracker = ByteTrackTracker(frame_rate=FPS)
-    box_annotator = sv.BoxAnnotator(thickness=1)
-    label_annotator = sv.LabelAnnotator(text_scale=0.4, text_thickness=1)
+
+    team_classifier = TeamClassifier()
 
     minimap_renderer = MinimapRenderer(width_px=MINIMAP_WIDTH_PX)
 
@@ -192,8 +195,13 @@ def run_pipeline():
         # Tracking
         detections = tracker.update(detections)
 
+        # Klasyfikacja druzyn
+        team_ids = team_classifier.classify(frame, detections)
+
         # Projekcja na boisko
         dets_dict = sv_detections_to_dict_list(detections)
+        for i, d in enumerate(dets_dict):
+            d["team_id"] = int(team_ids[i])
         dets_projected = calibrator.project_detections_to_pitch(dets_dict, H)
 
         # Zbieranie wierszy do CSV
@@ -210,12 +218,11 @@ def run_pipeline():
                 "bbox_y2": d["bbox"][3],
                 "pitch_x_m": pitch[0] if pitch else None,
                 "pitch_y_m": pitch[1] if pitch else None,
+                "team_id": d.get("team_id", -1),
             })
 
-        # Anotacja klatki (bboxy + etykiety)
-        labels = build_annotation_labels(detections)
-        annotated = box_annotator.annotate(frame.copy(), detections=detections)
-        annotated = label_annotator.annotate(annotated, detections=detections, labels=labels)
+        # Anotacja klatki (bboxy kolorowane wg druzyny)
+        annotated = annotate_frame_with_teams(frame, detections, team_ids, CLASS_NAMES)
 
         # Render minimapy z pozycjami i paddingiem do wysokosci klatki
         minimap = minimap_renderer.render(

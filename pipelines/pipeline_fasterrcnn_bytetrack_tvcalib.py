@@ -32,6 +32,7 @@ Uzycie:
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +47,7 @@ from src.detection.faster_rcnn import FasterRCNNDetector
 from src.calibration.homography import TVCalibHomography
 from src.tracking.bytetrack_tracker import ByteTrackTracker
 from src.visualization.minimap import MinimapRenderer
+from src.classification.team_classifier import TeamClassifier, annotate_frame_with_teams
 
 
 # ==========================================================================
@@ -59,7 +61,7 @@ TVCALIB_WEIGHTS = PROJECT_ROOT / "src" / "calibration" / "tvcalib" / "data" / "s
 
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 5 # co ile klatek rekalibrowac homografie TVCalib (im mniejszy, tym bardziej odporny na dryft ale wolniejszy pipeline)
+CALIB_STRIDE = 25 # co ile klatek rekalibrowac homografie TVCalib (im mniejszy, tym bardziej odporny na dryft ale wolniejszy pipeline)
 OPTIM_STEPS = 500 # liczba krokow optymalizacji TVCalib (im wiecej, tym dokladniejsza ale wolniejsza kalibracja)
 
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
@@ -116,8 +118,9 @@ def run_pipeline(
     run_name: str = RUN_NAME,
 ):
     output_dir = PROJECT_ROOT / "results" / run_name
-    output_video = output_dir / "output.mp4"
-    output_csv = output_dir / "tracks.csv"
+    _ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_video = output_dir / f"{_ts}_output.mp4"
+    output_csv = output_dir / f"{_ts}_tracks.csv"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     t_pipeline_start = time.time()
@@ -159,8 +162,8 @@ def run_pipeline(
 
     # ---- 5. Inicjalizacja trackera, anotatorow i minimapy ----
     tracker = ByteTrackTracker(frame_rate=FPS)
-    box_annotator = sv.BoxAnnotator(thickness=1)
-    label_annotator = sv.LabelAnnotator(text_scale=0.4, text_thickness=1)
+
+    team_classifier = TeamClassifier()
 
     minimap_renderer = MinimapRenderer(width_px=MINIMAP_WIDTH_PX)
 
@@ -213,8 +216,13 @@ def run_pipeline(
         if len(detections) > 0:
             detections = tracker.update(detections)
 
+        # --- Klasyfikacja druzyn ---
+        team_ids = team_classifier.classify(frame, detections)
+
         # --- Projekcja na boisko ---
         dets_dict = sv_detections_to_dict_list(detections)
+        for i, d in enumerate(dets_dict):
+            d["team_id"] = int(team_ids[i])
         if H is not None:
             dets_projected = calibrator.project_detections_to_pitch(dets_dict, H)
         else:
@@ -234,13 +242,12 @@ def run_pipeline(
                 "bbox_y2": round(d["bbox"][3], 1),
                 "pitch_x_m": round(pitch[0], 3) if pitch else None,
                 "pitch_y_m": round(pitch[1], 3) if pitch else None,
+                "team_id": d.get("team_id", -1),
             })
 
         # --- Anotacja klatki ---
         if len(detections) > 0:
-            labels = build_annotation_labels(detections)
-            annotated = box_annotator.annotate(frame.copy(), detections=detections)
-            annotated = label_annotator.annotate(annotated, detections=detections, labels=labels)
+            annotated = annotate_frame_with_teams(frame, detections, team_ids, CLASS_NAMES)
         else:
             annotated = frame.copy()
 
