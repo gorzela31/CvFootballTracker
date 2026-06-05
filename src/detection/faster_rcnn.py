@@ -29,6 +29,7 @@ import torch
 import supervision as sv
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2, FasterRCNN_ResNet50_FPN_V2_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.rpn import AnchorGenerator
 
 
 # Klasy zgodne z modelem YOLO (dla spojnosci miedzy pipeline'ami)
@@ -42,6 +43,12 @@ COCO_TO_SOCCERNET = {
 
 NUM_CLASSES = 4  # background + ball + player + referee
 
+# Konfiguracja kotwic zgodna z treningiem v3/v4 (przesun kotwice pod mala pilke)
+# Jesli trenujesz nowy model z innymi kotwicami, zmien ponizej:
+#_ANCHOR_SIZES  = ((16,), (32,), (64,), (128,), (256,))   # v3/v4
+_ANCHOR_SIZES = ((32,), (64,), (128,), (256,), (512,))  # domyslne torchvision (v2 i starsze)
+_ANCHOR_RATIOS = (0.5, 1.0, 2.0)
+
 
 class FasterRCNNDetector:
     """
@@ -51,23 +58,37 @@ class FasterRCNNDetector:
         weights_path   : sciezka do wag fine-tuned (.pt), None = COCO pretrained
         conf_threshold : domyslny prog confidence
         device         : 'cuda' / 'cpu' / None (auto)
+        min_size       : krotszy bok obrazu po wewn. resizingu FPN
+        max_size       : dluzszy bok obrazu po wewn. resizingu FPN
     """
 
-    def __init__(self, weights_path=None, conf_threshold=0.5, device=None):
+    def __init__(self, weights_path=None, conf_threshold=0.5, device=None,
+                 min_size=800, max_size=1333):   # v3/v4: 1080/1920 | v2 i starsze: 800/1333
         self.conf_threshold = conf_threshold
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.use_coco_mapping = weights_path is None
 
         if weights_path is not None:
-            # Model fine-tuned na SoccerNet
-            model = fasterrcnn_resnet50_fpn_v2(weights=None)
+            # Model fine-tuned na SoccerNet — architektura musi byc identyczna z treningiem
+            model = fasterrcnn_resnet50_fpn_v2(
+                weights=None,
+                min_size=min_size,
+                max_size=max_size,
+                rpn_pre_nms_top_n_test=2000,
+                rpn_post_nms_top_n_test=1000,
+            )
+            # Kotwice przesuniete w dol pod mala pilke (v3/v4); nie sa zapisywane w state_dict
+            model.rpn.anchor_generator = AnchorGenerator(
+                _ANCHOR_SIZES, (_ANCHOR_RATIOS,) * len(_ANCHOR_SIZES)
+            )
             in_features = model.roi_heads.box_predictor.cls_score.in_features
             model.roi_heads.box_predictor = FastRCNNPredictor(in_features, NUM_CLASSES)
             state = torch.load(weights_path, map_location=self.device, weights_only=True)
             model.load_state_dict(state)
             print(f"[FasterRCNN] Zaladowano wagi fine-tuned: {weights_path}")
+            print(f"[FasterRCNN] Rozdzielczosc: min={min_size}, max={max_size} | kotwice: {_ANCHOR_SIZES}")
         else:
-            # COCO pretrained (91 klas)
+            # COCO pretrained (91 klas) — domyslna konfiguracja torchvision
             model = fasterrcnn_resnet50_fpn_v2(
                 weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
             )
