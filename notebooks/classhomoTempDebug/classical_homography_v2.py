@@ -295,11 +295,15 @@ class ClassicalHomographyV2:
             aspect = max(bw, bh) / max(min(bw, bh), 1)
             thin_dim = min(bw, bh)
 
+            # Zawodnik to zazwyczaj obiekt wyższy niż szerszy, ale grubszy niż zwykła linia
+            is_vertical_player = (bh > bw * 1.2) and (thin_dim > 6) and (area > 30)
+            
             is_line = (aspect >= 4.0
                        or (thin_dim <= 12 and area < 800)
                        or area < 150)
             is_blob = ((aspect < 2.0 and area > 300)
-                       or (area > 2000 and aspect < 3.0))
+                       or (area > 2000 and aspect < 3.0)
+                       or is_vertical_player) # Dodajemy zawodników do blobów
             if is_line and not is_blob:
                 filtered[labels == i] = 255
         return filtered
