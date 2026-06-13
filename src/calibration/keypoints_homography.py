@@ -2,28 +2,31 @@
 Plik: src/calibration/keypoints_homography.py
 
 Opis:
-    Wrapper nad modelem YOLOv8x-pose (roboflow/sports) do detekcji
-    keypoints boiska piłkarskiego i obliczenia macierzy homografii H (3x3).
+    Wrapper nad modelem YOLOv8x-pose (dataset: roboflow-jvuqo/football-field-detection-f07vi)
+    do detekcji 32 keypoints boiska piłkarskiego i obliczenia macierzy homografii H (3x3).
 
 Pipeline wewnętrzny (dwa etapy):
     1. Detekcja keypoints boiska
-       - Model YOLOv8x-pose wykrywa charakterystyczne punkty boiska
-         (narożniki, pola karne, środek, łuki) na obrazie klatki
+       - Model YOLOv8-pose wykrywa 32 charakterystyczne punkty boiska
+         (narożniki, pola karne, łuki, środek) na obrazie klatki
        - Wynikiem są pary (x_px, y_px, confidence) dla każdego keypointa
     2. Obliczenie homografii (RANSAC)
-       - Wykryte keypoints są dopasowywane do ich znanych pozycji na
-         szablonie boiska (w metrach, układ FIFA: 105m x 68m)
-       - cv2.findHomography z RANSAC oblicza macierz H minimalizując
-         błąd reprojekcji i odrzucając outliery
+       - Wykryte keypoints (>= KEYPOINT_CONFIDENCE_THRESHOLD) są
+         dopasowywane do ich znanych pozycji metrycznych na szablonie boiska
+       - cv2.findHomography z RANSAC oblicza H minimalizując błąd
+         reprojekcji i odrzucając outliery
+
+Układ współrzędnych (zgodny z TVCalib i PitchRenderer):
+    Wycentrowany: X ∈ [-52.5, +52.5] m, Y ∈ [-34, +34] m
+    Środek boiska = (0, 0)
 
 Użycie:
     from src.calibration.keypoints_homography import KeypointsHomography
 
     calibrator = KeypointsHomography(
-        model_weights="models/pitch_keypoints/pitch_keypoints_yolov8x_pose.pt"
+        model_weights="models/pitch_keypoints/trained_keypoints.pt"
     )
     H = calibrator.get_homography("sciezka/do/obrazu.jpg")
-
     pitch_coords = calibrator.project_point_to_pitch((x_px, y_px), H)
 """
 
@@ -34,44 +37,108 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# Wymiary boiska FIFA w metrach
-PITCH_LENGTH_M = 105.0
-PITCH_WIDTH_M = 68.0
+# Wymiary boiska FIFA w metrach (half-values dla układu wycentrowanego)
+PITCH_HALF_LENGTH_M = 52.5
+PITCH_HALF_WIDTH_M = 34.0
 
-# Minimalna liczba keypoints z wystarczającą pewnością do obliczenia H.
-# findHomography wymaga min. 4 par; większa liczba = stabilniejszy RANSAC.
+# Minimalna liczba keypoints do obliczenia homografii (RANSAC wymaga min. 4)
 MIN_KEYPOINTS_FOR_HOMOGRAPHY = 4
 
-# Próg pewności keypointa — punkty poniżej progu są odrzucane
+# Próg pewności keypointa poniżej którego punkt jest odrzucany
 KEYPOINT_CONFIDENCE_THRESHOLD = 0.5
 
 # Próg błędu reprojekcji RANSAC (w pikselach)
 RANSAC_REPROJ_THRESHOLD = 10.0
 
 # ---------------------------------------------------------------------------
-# Szablon boiska — pozycje keypoints w metrach (układ: (0,0) = lewy dolny róg)
+# Szablon boiska — pozycje 32 keypoints w metrach (układ wycentrowany)
 #
-# TODO: Zweryfikuj kolejność keypoints z datasetu roboflow/sports.
-#       Kolejność MUSI być identyczna z etykietami w modelu YOLOv8-pose.
-#       Sprawdź plik konfiguracyjny sports/configs/soccer.py lub
-#       annotacje datasetu na Roboflow Universe ("Football Field Keypoints").
+# Dataset: roboflow-jvuqo/football-field-detection-f07vi v16
+# kpt_shape: [32, 3]  (x, y, visibility)
+#
+# Kolejność wynika z analizy flip_idx (data.yaml) i geometrii boiska FIFA:
+#   Grupa A (0-5 ↔ 24-29): 6 punktów na lewej/prawej linii bramkowej (x=±52.5)
+#   Grupa B (6-7 ↔ 22-23): narożniki dalekich krawędzi pól karnych (x=±36)
+#   Grupa C (8 ↔ 21):      środek dalszej krawędzi pola karnego (x=±36, y=0)
+#   Grupa D (9-12 ↔ 17-20): narożniki pola bramkowego + łuk karny ∩ linia pola karnego
+#   Grupa E (13-16):        4 punkty na linii środkowej (x=0), self-symmetric
+#   Grupa F (30 ↔ 31):      punkty karne (x=±41.5, y=0)
+#
+# Standardowe wymiary FIFA (metry):
+#   Długość: 105m  → x ∈ [-52.5, 52.5]
+#   Szerokość: 68m → y ∈ [-34, 34]
+#   Pole karne: głębokość 16.5m, szerokość 40.32m (±20.16 od osi)
+#   Pole bramkowe: głębokość 5.5m, szerokość 18.32m (±9.16 od osi)
+#   Punkt karny: 11m od linii bramkowej → x = ±41.5
+#   Promień łuku karnego = promień koła środkowego = 9.15m
+#   Łuk karny ∩ linia pola karnego: y_offset = sqrt(9.15² - 5.5²) ≈ 7.31m
 # ---------------------------------------------------------------------------
 PITCH_KEYPOINTS_TEMPLATE_M: np.ndarray = np.array([
-    # [x_m, y_m] — TODO: uzupelnij na podstawie roboflow/sports
+    # --- Grupa A: lewa linia bramkowa (x=-52.5) ---
+    [-52.5, -34.0],   # 0: lewy górny narożnik boiska
+    [-52.5, -20.16],  # 1: górna krawędź lewego pola karnego
+    [-52.5,  -9.16],  # 2: górna krawędź lewego pola bramkowego
+    [-52.5,   9.16],  # 3: dolna krawędź lewego pola bramkowego
+    [-52.5,  20.16],  # 4: dolna krawędź lewego pola karnego
+    [-52.5,  34.0],   # 5: lewy dolny narożnik boiska
+
+    # --- Grupa B: daleka krawędź lewego pola karnego (x=-36) ---
+    [-36.0, -20.16],  # 6: lewy górny narożnik dalszej krawędzi pola karnego
+    [-36.0,  20.16],  # 7: lewy dolny narożnik dalszej krawędzi pola karnego
+
+    # --- Grupa C: środek dalszej krawędzi lewego pola karnego ---
+    [-36.0,   0.0],   # 8: środek dalszej krawędzi lewego pola karnego
+
+    # --- Grupa D: lewe pole bramkowe + łuk karny (x=-47 i x=-36) ---
+    [-47.0,  -9.16],  # 9:  górny narożnik dalszej krawędzi lewego pola bramkowego
+    [-47.0,   9.16],  # 10: dolny narożnik dalszej krawędzi lewego pola bramkowego
+    [-36.0,  -7.31],  # 11: górne przecięcie łuku karnego z krawędzią pola karnego
+    [-36.0,   7.31],  # 12: dolne przecięcie łuku karnego z krawędzią pola karnego
+
+    # --- Grupa E: linia środkowa (x=0), self-symmetric ---
+    [  0.0, -34.0],   # 13: górna krawędź linii środkowej (przy bocznej)
+    [  0.0,  -9.15],  # 14: górne przecięcie koła środkowego z linią środkową
+    [  0.0,   9.15],  # 15: dolne przecięcie koła środkowego z linią środkową
+    [  0.0,  34.0],   # 16: dolna krawędź linii środkowej (przy bocznej)
+
+    # --- Grupa D: prawe pole bramkowe + łuk karny (mirror 9-12) ---
+    [ 47.0,  -9.16],  # 17: górny narożnik dalszej krawędzi prawego pola bramkowego
+    [ 47.0,   9.16],  # 18: dolny narożnik dalszej krawędzi prawego pola bramkowego
+    [ 36.0,  -7.31],  # 19: górne przecięcie łuku karnego (prawe pole)
+    [ 36.0,   7.31],  # 20: dolne przecięcie łuku karnego (prawe pole)
+
+    # --- Grupa C: środek dalszej krawędzi prawego pola karnego (mirror 8) ---
+    [ 36.0,   0.0],   # 21: środek dalszej krawędzi prawego pola karnego
+
+    # --- Grupa B: daleka krawędź prawego pola karnego (mirror 6-7) ---
+    [ 36.0, -20.16],  # 22: prawy górny narożnik dalszej krawędzi pola karnego
+    [ 36.0,  20.16],  # 23: prawy dolny narożnik dalszej krawędzi pola karnego
+
+    # --- Grupa A: prawa linia bramkowa (x=+52.5), mirror 0-5 ---
+    [ 52.5, -34.0],   # 24: prawy górny narożnik boiska
+    [ 52.5, -20.16],  # 25: górna krawędź prawego pola karnego
+    [ 52.5,  -9.16],  # 26: górna krawędź prawego pola bramkowego
+    [ 52.5,   9.16],  # 27: dolna krawędź prawego pola bramkowego
+    [ 52.5,  20.16],  # 28: dolna krawędź prawego pola karnego
+    [ 52.5,  34.0],   # 29: prawy dolny narożnik boiska
+
+    # --- Grupa F: punkty karne (mirror pair) ---
+    [-41.5,   0.0],   # 30: lewy punkt karny (11m od linii bramkowej)
+    [ 41.5,   0.0],   # 31: prawy punkt karny
 ], dtype=np.float32)
 
 
 class KeypointsHomography:
     """
     Estymuje macierz homografii H dla obrazu transmisji piłkarskiej
-    przy użyciu modelu YOLOv8-pose wykrywającego keypoints boiska.
+    przy użyciu modelu YOLOv8-pose wykrywającego 32 keypoints boiska.
 
-    H mapuje: współrzędne pikselowe obrazu → metry na boisku.
-    Układ boiska: lewy dolny róg = (0, 0), prawy górny = (105, 68).
+    H mapuje: współrzędne pikselowe obrazu → metry na boisku (układ wycentrowany).
+    Układ boiska: środek = (0, 0), X ∈ [-52.5, 52.5], Y ∈ [-34, 34].
 
     Parametry:
-        model_weights : ścieżka do pliku wag modelu YOLOv8-pose
-        conf_threshold: minimalny poziom pewności keypointa (domyślnie 0.5)
+        model_weights  : ścieżka do pliku wag modelu YOLOv8-pose (.pt)
+        conf_threshold : minimalny poziom pewności keypointa (domyślnie 0.5)
     """
 
     def __init__(
@@ -99,11 +166,25 @@ class KeypointsHomography:
         Zwraca:
             np.ndarray (3x3) lub None jeśli kalibracja się nie powiodła
         """
-        # TODO: Implement
-        raise NotImplementedError(
-            "KeypointsHomography.get_homography() nie jest jeszcze zaimplementowane. "
-            "Zaimplementuj zgodnie z pipeline'em: detekcja keypoints → RANSAC homografia."
-        )
+        keypoints = self._detect_keypoints(image_path)
+        if keypoints is None:
+            return None
+
+        # Wybierz keypoints z wystarczającą pewnością
+        confident_mask = keypoints[:, 2] >= self.conf_threshold
+        n_confident = confident_mask.sum()
+
+        if n_confident < MIN_KEYPOINTS_FOR_HOMOGRAPHY:
+            print(
+                f"[KeypointsHomography] Za mało pewnych keypoints: {n_confident} "
+                f"(wymagane >= {MIN_KEYPOINTS_FOR_HOMOGRAPHY})"
+            )
+            return None
+
+        src_pts = keypoints[confident_mask, :2]           # (N, 2) — piksele
+        dst_pts = PITCH_KEYPOINTS_TEMPLATE_M[confident_mask]  # (N, 2) — metry
+
+        return self._compute_homography(src_pts, dst_pts)
 
     def project_point_to_pitch(
         self, pixel_point: tuple, H: np.ndarray
@@ -116,7 +197,7 @@ class KeypointsHomography:
             H           : macierz homografii 3x3
 
         Zwraca:
-            (x_m, y_m) w metrach lub None jeśli punkt poza boiskiem
+            (x_m, y_m) w metrach (układ wycentrowany) lub None jeśli poza boiskiem
         """
         px, py = pixel_point
         p_h = np.array([px, py, 1.0], dtype=np.float64)
@@ -124,7 +205,10 @@ class KeypointsHomography:
         world /= world[2]
         x_m, y_m = float(world[0]), float(world[1])
 
-        if not (0.0 <= x_m <= PITCH_LENGTH_M and 0.0 <= y_m <= PITCH_WIDTH_M):
+        if not (
+            -PITCH_HALF_LENGTH_M <= x_m <= PITCH_HALF_LENGTH_M
+            and -PITCH_HALF_WIDTH_M <= y_m <= PITCH_HALF_WIDTH_M
+        ):
             return None
         return (x_m, y_m)
 
@@ -156,44 +240,58 @@ class KeypointsHomography:
 
     def _detect_keypoints(self, image_path: str) -> Optional[np.ndarray]:
         """
-        Uruchamia YOLOv8-pose na obrazie i zwraca wykryte keypoints.
+        Uruchamia YOLOv8-pose na obrazie i zwraca 32 keypoints.
 
         Zwraca:
-            np.ndarray kształtu (N, 3) — (x_px, y_px, confidence) per keypoint,
-            lub None jeśli model nie wykrył boiska
+            np.ndarray kształtu (32, 3) — (x_px, y_px, confidence) per keypoint,
+            lub None jeśli model nie wykrył żadnego boiska
         """
-        # TODO: Implement
-        raise NotImplementedError
+        results = self.model(image_path, verbose=False, device=self.device)
+
+        if not results or len(results[0].keypoints) == 0:
+            print(f"[KeypointsHomography] Brak detekcji boiska w: {image_path}")
+            return None
+
+        # Weź detekcję z najwyższym confidence (powinno być max 1 boisko na klatce)
+        kp_data = results[0].keypoints
+        if kp_data.conf is None or len(kp_data.conf) == 0:
+            return None
+
+        best_idx = int(kp_data.conf.mean(dim=1).argmax())
+
+        xy = kp_data.xy[best_idx].cpu().numpy()     # (32, 2)
+        conf = kp_data.conf[best_idx].cpu().numpy()  # (32,)
+
+        return np.column_stack([xy, conf])            # (32, 3)
 
     def _compute_homography(
         self,
-        keypoints_px: np.ndarray,
-        keypoints_template_m: np.ndarray,
+        src_pts: np.ndarray,
+        dst_pts: np.ndarray,
     ) -> Optional[np.ndarray]:
         """
         Oblicza macierz homografii H metodą RANSAC.
 
         Parametry:
-            keypoints_px         : (N, 2) — wykryte pozycje w pikselach
-            keypoints_template_m : (N, 2) — odpowiadające pozycje na szablonie (metry)
+            src_pts : (N, 2) — wykryte pozycje keypoints w pikselach
+            dst_pts : (N, 2) — odpowiadające pozycje na szablonie boiska (metry)
 
         Zwraca:
-            np.ndarray (3x3) lub None jeśli RANSAC się nie powiódł
+            np.ndarray (3x3) lub None jeśli RANSAC się nie powiódł / za mało inlierów
         """
-        if len(keypoints_px) < MIN_KEYPOINTS_FOR_HOMOGRAPHY:
-            return None
-
         H, mask = cv2.findHomography(
-            keypoints_px,
-            keypoints_template_m,
+            src_pts.astype(np.float32),
+            dst_pts.astype(np.float32),
             method=cv2.RANSAC,
             ransacReprojThreshold=RANSAC_REPROJ_THRESHOLD,
         )
         if H is None:
+            print("[KeypointsHomography] RANSAC nie znalazł homografii")
             return None
 
         n_inliers = int(mask.sum()) if mask is not None else 0
         if n_inliers < MIN_KEYPOINTS_FOR_HOMOGRAPHY:
+            print(f"[KeypointsHomography] Za mało inlierów RANSAC: {n_inliers}")
             return None
 
         return H

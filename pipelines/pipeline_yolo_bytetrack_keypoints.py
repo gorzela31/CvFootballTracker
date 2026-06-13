@@ -46,7 +46,7 @@ RUN_NAME = "pipeline_yolo_bt_keypoints"
 
 FRAMES_DIR = PROJECT_ROOT / "data" / "tracking_dataset" / "tracking" / "test" / "SNMOT-123" / "img1"
 YOLO_WEIGHTS = PROJECT_ROOT / "models" / "yolov8n" / "trained_detection_yolov8n.pt"
-KEYPOINTS_WEIGHTS = PROJECT_ROOT / "models" / "pitch_keypoints" / "pitch_keypoints_yolov8x_pose.pt"
+KEYPOINTS_WEIGHTS = PROJECT_ROOT / "models" / "pitch_keypoints" / "trained_keypoints.pt"
 
 OUTPUT_DIR = PROJECT_ROOT / "results" / RUN_NAME
 _TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -55,7 +55,7 @@ OUTPUT_CSV = OUTPUT_DIR / f"{_TS}_tracks.csv"
 
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 10
+CALIB_STRIDE = 1
 MINIMAP_WIDTH_PX = 500
 
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}

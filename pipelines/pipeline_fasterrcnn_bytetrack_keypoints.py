@@ -58,7 +58,7 @@ RUN_NAME = "pipeline_frcnn_bt_keypoints"
 
 FRAMES_DIR = PROJECT_ROOT / "data" / "tracking_dataset" / "tracking" / "test" / "SNMOT-123" / "img1"
 FRCNN_WEIGHTS = PROJECT_ROOT / "models" / "faster_rcnn" / "trained_fasterrcnn_resnet50.pt"
-KEYPOINTS_WEIGHTS = PROJECT_ROOT / "models" / "pitch_keypoints" / "pitch_keypoints_yolov8x_pose.pt"
+KEYPOINTS_WEIGHTS = PROJECT_ROOT / "models" / "pitch_keypoints" / "trained_keypoints.pt"
 
 CONF_THRESHOLD = 0.10
 FPS = 25

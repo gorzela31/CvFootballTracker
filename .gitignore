@@ -220,4 +220,3 @@ models/**/*.pt
 # Wyjątki modeli
 !models/yolov8n/yolov8n.pt
 !models/yolov8n/trained_detection_yolov8n.pt
-!models/pitch_keypoints/pitch_keypoints_yolov8x_pose.pt
