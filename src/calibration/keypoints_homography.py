@@ -74,57 +74,57 @@ RANSAC_REPROJ_THRESHOLD = 10.0
 #   Łuk karny ∩ linia pola karnego: y_offset = sqrt(9.15² - 5.5²) ≈ 7.31m
 # ---------------------------------------------------------------------------
 PITCH_KEYPOINTS_TEMPLATE_M: np.ndarray = np.array([
-    # --- Grupa A: lewa linia bramkowa (x=-52.5) ---
-    [-52.5, -34.0],   # 0: lewy górny narożnik boiska
-    [-52.5, -20.16],  # 1: górna krawędź lewego pola karnego
-    [-52.5,  -9.16],  # 2: górna krawędź lewego pola bramkowego
-    [-52.5,   9.16],  # 3: dolna krawędź lewego pola bramkowego
-    [-52.5,  20.16],  # 4: dolna krawędź lewego pola karnego
-    [-52.5,  34.0],   # 5: lewy dolny narożnik boiska
+    # --- Lewa linia bramkowa ---
+    [-52.5, -34.0],   # K00: górny lewy narożnik boiska
+    [-52.5, -20.16],  # K01: linia bramkowa / górna krawędź pola karnego
+    [-52.5,  -9.16],  # K02: linia bramkowa / górna krawędź pola bramkowego
+    [-52.5,   9.16],  # K03: linia bramkowa / dolna krawędź pola bramkowego
+    [-52.5,  20.16],  # K04: linia bramkowa / dolna krawędź pola karnego
+    [-52.5,  34.0],   # K05: dolny lewy narożnik boiska
 
-    # --- Grupa B: daleka krawędź lewego pola karnego (x=-36) ---
-    [-36.0, -20.16],  # 6: lewy górny narożnik dalszej krawędzi pola karnego
-    [-36.0,  20.16],  # 7: lewy dolny narożnik dalszej krawędzi pola karnego
+    # --- Lewe pole bramkowe ---
+    [-47.0,  -9.16],  # K06: dalszy górny narożnik pola bramkowego
+    [-47.0,   9.16],  # K07: dalszy dolny narożnik pola bramkowego
 
-    # --- Grupa C: środek dalszej krawędzi lewego pola karnego ---
-    [-36.0,   0.0],   # 8: środek dalszej krawędzi lewego pola karnego
+    # --- Lewy punkt karny ---
+    [-41.5,   0.0],   # K08: lewy punkt karny
 
-    # --- Grupa D: lewe pole bramkowe + łuk karny (x=-47 i x=-36) ---
-    [-47.0,  -9.16],  # 9:  górny narożnik dalszej krawędzi lewego pola bramkowego
-    [-47.0,   9.16],  # 10: dolny narożnik dalszej krawędzi lewego pola bramkowego
-    [-36.0,  -7.31],  # 11: górne przecięcie łuku karnego z krawędzią pola karnego
-    [-36.0,   7.31],  # 12: dolne przecięcie łuku karnego z krawędzią pola karnego
+    # --- Lewe pole karne i łuk ---
+    [-36.0, -20.16],  # K09: dalszy górny narożnik pola karnego
+    [-36.0,  -7.31],  # K10: górne przecięcie łuku z linią pola karnego
+    [-36.0,   7.31],  # K11: dolne przecięcie łuku z linią pola karnego
+    [-36.0,  20.16],  # K12: dalszy dolny narożnik pola karnego
 
-    # --- Grupa E: linia środkowa (x=0), self-symmetric ---
-    [  0.0, -34.0],   # 13: górna krawędź linii środkowej (przy bocznej)
-    [  0.0,  -9.15],  # 14: górne przecięcie koła środkowego z linią środkową
-    [  0.0,   9.15],  # 15: dolne przecięcie koła środkowego z linią środkową
-    [  0.0,  34.0],   # 16: dolna krawędź linii środkowej (przy bocznej)
+    # --- Linia środkowa ---
+    [  0.0, -34.0],   # K13: górne przecięcie linii środkowej z linią boczną
+    [  0.0,  -9.15],  # K14: górne przecięcie koła środkowego z linią środkową
+    [  0.0,   9.15],  # K15: dolne przecięcie koła środkowego z linią środkową
+    [  0.0,  34.0],   # K16: dolne przecięcie linii środkowej z linią boczną
 
-    # --- Grupa D: prawe pole bramkowe + łuk karny (mirror 9-12) ---
-    [ 47.0,  -9.16],  # 17: górny narożnik dalszej krawędzi prawego pola bramkowego
-    [ 47.0,   9.16],  # 18: dolny narożnik dalszej krawędzi prawego pola bramkowego
-    [ 36.0,  -7.31],  # 19: górne przecięcie łuku karnego (prawe pole)
-    [ 36.0,   7.31],  # 20: dolne przecięcie łuku karnego (prawe pole)
+    # --- Prawe pole karne i łuk ---
+    [ 36.0, -20.16],  # K17: dalszy górny narożnik pola karnego
+    [ 36.0,  -7.31],  # K18: górne przecięcie łuku z linią pola karnego
+    [ 36.0,   7.31],  # K19: dolne przecięcie łuku z linią pola karnego
+    [ 36.0,  20.16],  # K20: dalszy dolny narożnik pola karnego
 
-    # --- Grupa C: środek dalszej krawędzi prawego pola karnego (mirror 8) ---
-    [ 36.0,   0.0],   # 21: środek dalszej krawędzi prawego pola karnego
+    # --- Prawy punkt karny ---
+    [ 41.5,   0.0],   # K21: prawy punkt karny
 
-    # --- Grupa B: daleka krawędź prawego pola karnego (mirror 6-7) ---
-    [ 36.0, -20.16],  # 22: prawy górny narożnik dalszej krawędzi pola karnego
-    [ 36.0,  20.16],  # 23: prawy dolny narożnik dalszej krawędzi pola karnego
+    # --- Prawe pole bramkowe ---
+    [ 47.0,  -9.16],  # K22: dalszy górny narożnik pola bramkowego
+    [ 47.0,   9.16],  # K23: dalszy dolny narożnik pola bramkowego
 
-    # --- Grupa A: prawa linia bramkowa (x=+52.5), mirror 0-5 ---
-    [ 52.5, -34.0],   # 24: prawy górny narożnik boiska
-    [ 52.5, -20.16],  # 25: górna krawędź prawego pola karnego
-    [ 52.5,  -9.16],  # 26: górna krawędź prawego pola bramkowego
-    [ 52.5,   9.16],  # 27: dolna krawędź prawego pola bramkowego
-    [ 52.5,  20.16],  # 28: dolna krawędź prawego pola karnego
-    [ 52.5,  34.0],   # 29: prawy dolny narożnik boiska
+    # --- Prawa linia bramkowa ---
+    [ 52.5, -34.0],   # K24: górny prawy narożnik boiska
+    [ 52.5, -20.16],  # K25: linia bramkowa / górna krawędź pola karnego
+    [ 52.5,  -9.16],  # K26: linia bramkowa / górna krawędź pola bramkowego
+    [ 52.5,   9.16],  # K27: linia bramkowa / dolna krawędź pola bramkowego
+    [ 52.5,  20.16],  # K28: linia bramkowa / dolna krawędź pola karnego
+    [ 52.5,  34.0],   # K29: dolny prawy narożnik boiska
 
-    # --- Grupa F: punkty karne (mirror pair) ---
-    [-41.5,   0.0],   # 30: lewy punkt karny (11m od linii bramkowej)
-    [ 41.5,   0.0],   # 31: prawy punkt karny
+    # --- Koło środkowe ---
+    [ -9.15, 0.0],    # K30: lewy punkt koła środkowego
+    [  9.15, 0.0],    # K31: prawy punkt koła środkowego
 ], dtype=np.float32)
 
 
