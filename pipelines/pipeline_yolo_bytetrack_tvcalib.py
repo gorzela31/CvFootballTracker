@@ -58,7 +58,7 @@ OUTPUT_CSV = OUTPUT_DIR / f"{_TS}_tracks.csv"
 # Parametry przetwarzania
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 10   # co ile klatek liczona homografia
+CALIB_STRIDE = 1   # co ile klatek liczona homografia
                     # 1   = kazda klatka (najdokladniejsza projekcja)
                     # 25  = co sekunde przy 25 fps
                     # 750 = tylko pierwsza klatka (najszybsze przetwarzanie)
