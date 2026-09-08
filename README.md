@@ -18,7 +18,7 @@ The processing pipeline consists of three main stages:
 1. **Detection:** Locating players, referees, and the ball. The project compares two object detection architectures: YOLOv8n and Faster R-CNN (ResNet50-FPN v2).
 2. **Multi-Object Tracking (MOT):** Maintaining consistent player IDs across video frames using ByteTrack.
 3. **Team Classification:** Assigning players to teams based on jersey color using K-means clustering in HSV color space.
-4. **Pitch Localization:** Detecting pitch keypoints and lines to calculate a homography matrix. The project compares two approaches: TVCalib (neural) and classical homography (manual line correspondences). This transformation maps the bottom-center of player bounding boxes (feet contact points) to a standard 2D pitch coordinate system.
+4. **Pitch Localization:** Detecting pitch keypoints and lines to calculate a homography matrix. The project compares two approaches: TVCalib (neural segmentation-based) and YOLO Keypoints (YOLOv8x-pose + RANSAC, based on roboflow/sports). This transformation maps the bottom-center of player bounding boxes (feet contact points) to a standard 2D pitch coordinate system.
 
 ## Dataset
 
@@ -32,12 +32,19 @@ The project is designed for a hybrid workflow: local development for source code
 
 ```text
 ├── data/                   # Git-ignored: Raw datasets and annotations
-├── models/                 # Wagi modeli (.pt)
+├── models/
+│   ├── yolov8n/            # Wagi detektora YOLOv8n
+│   ├── faster_rcnn/        # Wagi detektora Faster R-CNN
+│   └── pitch_keypoints/    # Wagi modelu YOLOv8x-pose (keypoints boiska, roboflow/sports)
 ├── notebooks/              # Notebooki treningowe (Colab) – YOLOv8n, Faster R-CNN
 ├── pipelines/              # Gotowe pipeline'y E2E (4 kombinacje: detektor × kalibracja)
-├── scripts/                # Skrypty pomocnicze (pobieranie danych SoccerNet)
+├── scripts/                # Skrypty pomocnicze (pobieranie danych, modeli)
 ├── src/
-│   ├── calibration/        # Homografia: TVCalib (neuronowa) + klasyczna
+│   ├── calibration/
+│   │   ├── homography.py               # Wrapper TVCalib
+│   │   ├── keypoints_homography.py     # Wrapper YOLO Keypoints + RANSAC
+│   │   ├── classicalApproachPlayground/# Eksperymenty z klasycznym podejściem (archiwum)
+│   │   └── tvcalib/                    # Submoduł TVCalib (Theiner et al., WACV 2023)
 │   ├── classification/     # Klasyfikacja drużyn (K-means na kolorze koszulek)
 │   ├── detection/          # Detektory: YOLOv8n, Faster R-CNN – inferencja i trening
 │   ├── tracking/           # Śledzenie obiektów (ByteTrack)
