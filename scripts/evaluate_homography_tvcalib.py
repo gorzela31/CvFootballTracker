@@ -1,77 +1,40 @@
 #!/usr/bin/env python3
 """
-Ewaluacja homografii TVCalib względem referencyjnej H_GT.
+Ewaluacja homografii TVCalib wzgledem referencyjnej H_GT.
 
-Umieść plik jako:
-    CvFootballTracker/scripts/evaluate_homography_tvcalib.py
+Najwazniejsze zalozenia:
+1. TVCalib otrzymuje ORYGINALNA klatke - bez zewnetrznego STRETCH do 640x640.
+   Preprocessing wymagany przez model segmentacji jest realizowany wewnetrznie przez
+   TVCalibHomography.
+2. Homografia jest estymowana w kierunku IMAGE [px] -> PITCH [m].
+3. Kazda klatka jest estymowana niezaleznie, bez previous-H fallback.
+4. Jakosc H jest oceniana na tych samych dwoch punktach P1/P2 co w ewaluacji
+   metody keypointowej. Punkty sa wybierane niezaleznie od badanej metody na
+   podstawie H_GT i maja reprezentowac przykladowe polozenia zawodnikow.
+5. Dla P1/P2 liczone sa:
+   - blad reprojekcji [px] w ORYGINALNEJ rozdzielczosci obrazu,
+   - blad odwzorowania na plaszczyznie boiska [m].
+6. P1/P2 sa wybierane deterministycznie z regularnej siatki boiska:
+   - P1: punkt najblizszy srodkowi widocznego obszaru,
+   - P2: punkt najbardziej oddalony od P1 na obrazie.
+7. Czas estymacji obejmuje get_homography(), czyli segmentacje i kalibracje.
+   Inicjalizacja modelu i warm-up sa poza pomiarem. W podsumowaniu czas jest
+   liczony dla wszystkich prob z dostepnym pomiarem, rowniez nieudanych.
 
-Skrypt wykorzystuje tę samą klasę TVCalibHomography co pipeline:
-    src/calibration/homography.py
+Uruchomienie jednej klatki:
+    python scripts/evaluate_homography_tvcalib.py --mode single --eval-id 1
 
-Domyślna konfiguracja TVCalib:
-    OPTIM_STEPS = 500
-    lens_dist = False
-
-Wejście:
-    data/data_homography_evaluation/
-        images/
-            eval_homo_001.jpg ...
-        manifest.csv
-        ground_truth/
-            eval_homo_001_gt.json ...
-
-Wagi TVCalib:
-    src/calibration/tvcalib/data/segment_localization/train_59.pt
-
-Domyślne uruchomienie — jedna klatka:
-    python scripts/evaluate_homography_tvcalib.py
-
-Inna klatka:
-    python scripts/evaluate_homography_tvcalib.py --mode single --eval-id 27
-
-Cała pula:
+Uruchomienie calej puli:
     python scripts/evaluate_homography_tvcalib.py --mode all
 
 Wyniki:
-    results/homography_evaluation/<timestamp>/
+    results/homography_evaluation/<timestamp>_tvcalib_p1p2/
         metrics_summary.csv
         per_frame_metrics.csv
         point_errors.csv
         config.json
         estimated_homographies/
-            eval_homo_001_tvcalib.json
-            ...
         visualizations/
-            eval_homo_001_tvcalib_vs_gt.png
-            ...
-
-Metryki:
-    1. pitch error [m]
-       Dla referencyjnego punktu boiska P:
-           P --H_GT_pitch_to_image--> p_ref na obrazie
-           p_ref --H_TVCalib_image_to_pitch--> P_est
-       Błąd:
-           ||P_est - P|| [m]
-
-    2. reprojection error [px]
-       Dla tego samego P:
-           P --H_GT_pitch_to_image--> p_ref
-           P --H_TVCalib_pitch_to_image--> p_est
-       Błąd:
-           ||p_est - p_ref|| [px]
-
-Punkty testowe:
-    - regularna siatka na płaszczyźnie boiska,
-    - tylko punkty widoczne na danej klatce według H_GT,
-    - odsunięte od krawędzi boiska o PITCH_MARGIN_M,
-    - dzięki temu metryki nie są liczone na liniach użytych do estymacji H_GT.
-
-WAŻNE:
-    - każda klatka jest kalibrowana NIEZALEŻNIE;
-    - nie stosujemy mechanizmu "ostatniej poprawnej H" z pipeline'u,
-      ponieważ zawyżałoby to success rate ewaluacji;
-    - inicjalizacja modelu TVCalib nie wchodzi do czasu estymacji;
-    - punkty TVCalib wypadające poza boisko NIE są odrzucane przy liczeniu błędu.
 """
 
 from __future__ import annotations
@@ -82,7 +45,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -94,7 +57,6 @@ import pandas as pd
 import torch
 
 from src.calibration.homography import TVCalibHomography
-
 from generate_homography_gt import (
     draw_top_down_pitch,
     pitch_drawing_polylines,
@@ -126,13 +88,14 @@ RESULTS_ROOT = PROJECT_ROOT / "results" / "homography_evaluation"
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
 
-# Tak samo jak w pipeline_yolo_bytetrack_tvcalib.py.
+# Tak samo jak w pipeline.
 OPTIM_STEPS = 500
 
+# Siatka sluzy WYLACZNIE do deterministycznego wyboru P1/P2.
 GRID_STEP_M = 5.0
 PITCH_MARGIN_M = 5.0
 IMAGE_MARGIN_PX = 5.0
-NUM_VIS_POINTS = 2
+NUM_EVAL_POINTS = 2
 
 
 # =============================================================================
@@ -141,60 +104,65 @@ NUM_VIS_POINTS = 2
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Ewaluacja TVCalib względem referencyjnej homografii H_GT."
+        description=(
+            "Ewaluacja homografii TVCalib wzgledem H_GT "
+            "na punktach testowych P1/P2."
+        )
     )
-
     parser.add_argument(
         "--mode",
         choices=["single", "all"],
         default="single",
-        help="single = jedna klatka, all = cała zamrożona pula. Domyślnie single.",
+        help="single = jedna klatka, all = cala pula. Domyslnie single.",
     )
     parser.add_argument(
         "--eval-id",
         type=int,
         default=1,
-        help="Numer eval_id dla --mode single. Domyślnie 1.",
+        help="Numer eval_id dla --mode single. Domyslnie 1.",
     )
     parser.add_argument(
         "--optim-steps",
         type=int,
         default=OPTIM_STEPS,
-        help=f"Liczba kroków optymalizacji TVCalib. Domyślnie {OPTIM_STEPS}.",
+        help=f"Liczba krokow optymalizacji TVCalib. Domyslnie {OPTIM_STEPS}.",
     )
     parser.add_argument(
         "--grid-step-m",
         type=float,
         default=GRID_STEP_M,
-        help=f"Odstęp siatki punktów testowych [m]. Domyślnie {GRID_STEP_M}.",
+        help=(
+            "Krok pomocniczej siatki, z ktorej wybierane sa P1/P2 [m]. "
+            f"Domyslnie {GRID_STEP_M}."
+        ),
     )
     parser.add_argument(
         "--pitch-margin-m",
         type=float,
         default=PITCH_MARGIN_M,
-        help=f"Margines punktów od krawędzi boiska [m]. Domyślnie {PITCH_MARGIN_M}.",
+        help=(
+            "Margines pomocniczej siatki od krawedzi boiska [m]. "
+            f"Domyslnie {PITCH_MARGIN_M}."
+        ),
     )
     parser.add_argument(
         "--image-margin-px",
         type=float,
         default=IMAGE_MARGIN_PX,
-        help=f"Margines widoczności punktu na obrazie [px]. Domyślnie {IMAGE_MARGIN_PX}.",
-    )
-    parser.add_argument(
-        "--num-vis-points",
-        type=int,
-        default=NUM_VIS_POINTS,
-        help=f"Liczba par punktów na wizualizacji. Domyślnie {NUM_VIS_POINTS}.",
+        help=(
+            "Margines widocznosci kandydata P1/P2 na obrazie [px]. "
+            f"Domyslnie {IMAGE_MARGIN_PX}."
+        ),
     )
     parser.add_argument(
         "--lens-dist",
         action="store_true",
-        help="Włącz model dystorsji TVCalib. Pipeline domyślnie go nie używa.",
+        help="Wlacz model dystorsji TVCalib. Pipeline domyslnie go nie uzywa.",
     )
     parser.add_argument(
         "--no-visualizations",
         action="store_true",
-        help="Nie generuj PNG z porównaniem TVCalib vs GT.",
+        help="Nie generuj PNG z porownaniem H_est vs H_GT i P1/P2.",
     )
     return parser.parse_args()
 
@@ -215,10 +183,8 @@ def sync_cuda() -> None:
 
 def normalize_h(h: np.ndarray) -> np.ndarray:
     h = np.asarray(h, dtype=np.float64)
-
     if h.shape != (3, 3):
-        raise ValueError(f"Homografia ma nieprawidłowy kształt: {h.shape}")
-
+        raise ValueError(f"Homografia ma nieprawidlowy ksztalt: {h.shape}")
     if not np.isfinite(h).all():
         raise ValueError("Homografia zawiera NaN/Inf.")
 
@@ -227,12 +193,11 @@ def normalize_h(h: np.ndarray) -> np.ndarray:
     else:
         norm = np.linalg.norm(h)
         if norm <= 1e-12:
-            raise ValueError("Homografia ma zerową normę.")
+            raise ValueError("Homografia ma zerowa norme.")
         h = h / norm
 
     if abs(np.linalg.det(h)) < 1e-12:
         raise ValueError("Homografia jest osobliwa.")
-
     return h
 
 
@@ -244,28 +209,18 @@ def flatten_h(prefix: str, h: np.ndarray) -> Dict[str, float]:
     }
 
 
-def percentile(values: Sequence[float], q: float) -> float:
-    arr = np.asarray(values, dtype=np.float64)
-    if arr.size == 0:
-        return float("nan")
-    return float(np.percentile(arr, q))
-
-
 def load_manifest() -> pd.DataFrame:
     ensure_exists(EVAL_MANIFEST, "manifest.csv")
-    ensure_exists(EVAL_IMAGES, "katalogu obrazów ewaluacyjnych")
+    ensure_exists(EVAL_IMAGES, "katalogu obrazow ewaluacyjnych")
     ensure_exists(GT_DIR, "katalogu ground_truth")
 
     manifest = pd.read_csv(EVAL_MANIFEST)
-
     required = {"eval_id", "eval_stem", "eval_image"}
     missing = required - set(manifest.columns)
-
     if missing:
         raise ValueError(
             f"manifest.csv nie zawiera wymaganych kolumn: {sorted(missing)}"
         )
-
     return manifest.sort_values("eval_id").reset_index(drop=True)
 
 
@@ -274,30 +229,24 @@ def select_samples(
     mode: str,
     eval_id: int,
 ) -> List[dict]:
-
     if mode == "single":
-        rows = manifest[manifest["eval_id"] == eval_id]
-        if rows.empty:
+        selected = manifest[manifest["eval_id"] == eval_id]
+        if selected.empty:
             raise ValueError(
                 f"Nie znaleziono eval_id={eval_id}. "
-                f"Dostępny zakres: "
-                f"{int(manifest['eval_id'].min())}-"
+                f"Dostepny zakres: {int(manifest['eval_id'].min())}-"
                 f"{int(manifest['eval_id'].max())}."
             )
-        selected = rows
     else:
         selected = manifest
 
     samples: List[dict] = []
-
     for row in selected.itertuples(index=False):
         eval_stem = str(row.eval_stem)
         image_path = EVAL_IMAGES / str(row.eval_image)
         gt_path = GT_DIR / f"{eval_stem}_gt.json"
-
         ensure_exists(image_path, f"obrazu {eval_stem}")
         ensure_exists(gt_path, f"H_GT dla {eval_stem}")
-
         samples.append(
             {
                 "eval_id": int(row.eval_id),
@@ -306,7 +255,6 @@ def select_samples(
                 "gt_path": gt_path,
             }
         )
-
     return samples
 
 
@@ -319,17 +267,14 @@ def load_gt(gt_path: Path) -> dict:
             f"{gt_path.name} nie zawiera H_image_to_pitch / H_pitch_to_image."
         )
 
-    h_img2pitch = normalize_h(
-        np.asarray(data["H_image_to_pitch"], dtype=np.float64)
-    )
-    h_pitch2img = normalize_h(
-        np.asarray(data["H_pitch_to_image"], dtype=np.float64)
-    )
-
     return {
         **data,
-        "_H_image_to_pitch": h_img2pitch,
-        "_H_pitch_to_image": h_pitch2img,
+        "_H_image_to_pitch": normalize_h(
+            np.asarray(data["H_image_to_pitch"], dtype=np.float64)
+        ),
+        "_H_pitch_to_image": normalize_h(
+            np.asarray(data["H_pitch_to_image"], dtype=np.float64)
+        ),
     }
 
 
@@ -339,28 +284,22 @@ def build_canonical_pitch_grid(
     step_m: float,
     margin_m: float,
 ) -> np.ndarray:
-    """
-    Niezależna regularna siatka punktów na boisku.
-    """
+    """Pomocnicza regularna siatka, z ktorej wybierane sa P1/P2."""
     if step_m <= 0:
-        raise ValueError("--grid-step-m musi być > 0.")
-
+        raise ValueError("--grid-step-m musi byc > 0.")
     if margin_m < 0:
-        raise ValueError("--pitch-margin-m nie może być ujemny.")
+        raise ValueError("--pitch-margin-m nie moze byc ujemny.")
 
     x_min = -pitch_length / 2.0 + margin_m
     x_max = +pitch_length / 2.0 - margin_m
     y_min = -pitch_width / 2.0 + margin_m
     y_max = +pitch_width / 2.0 - margin_m
-
     if x_min >= x_max or y_min >= y_max:
-        raise ValueError("Margines boiska jest zbyt duży.")
+        raise ValueError("Margines boiska jest zbyt duzy.")
 
     xs = np.arange(x_min, x_max + 1e-9, step_m, dtype=np.float64)
     ys = np.arange(y_min, y_max + 1e-9, step_m, dtype=np.float64)
-
     xx, yy = np.meshgrid(xs, ys)
-
     return np.column_stack([xx.ravel(), yy.ravel()])
 
 
@@ -371,17 +310,9 @@ def visible_reference_points(
     image_height: int,
     image_margin_px: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Z siatki wybiera tylko punkty widoczne na klatce według H_GT.
-
-    Zwraca:
-        pitch_points_ref [N,2]
-        image_points_ref [N,2]
-    """
+    """Zwraca punkty siatki, ktore wedlug H_GT sa widoczne na obrazie."""
     image_points = transform_points(h_gt_pitch2img, pitch_grid)
-
     finite = np.isfinite(image_points).all(axis=1)
-
     visible = (
         finite
         & (image_points[:, 0] >= image_margin_px)
@@ -389,51 +320,60 @@ def visible_reference_points(
         & (image_points[:, 1] >= image_margin_px)
         & (image_points[:, 1] < image_height - image_margin_px)
     )
-
     return pitch_grid[visible], image_points[visible]
 
+
+def choose_evaluation_indices(image_points_ref: np.ndarray) -> np.ndarray:
+    """
+    Deterministyczny wybor tych samych dwoch punktow P1/P2 co dla keypoints.
+
+    P1: kandydat najblizszy centroidowi widocznych punktow na obrazie.
+    P2: kandydat najbardziej oddalony od P1 w przestrzeni obrazu.
+
+    Wybor wykorzystuje wylacznie punkty referencyjne z H_GT, a nie H_est.
+    """
+    n = len(image_points_ref)
+    if n < NUM_EVAL_POINTS:
+        raise ValueError(
+            f"Za malo widocznych kandydatow do wyboru P1/P2: {n}."
+        )
+
+    center = image_points_ref.mean(axis=0)
+    p1 = int(np.argmin(np.linalg.norm(image_points_ref - center, axis=1)))
+
+    distances = np.linalg.norm(image_points_ref - image_points_ref[p1], axis=1)
+    distances[p1] = -np.inf
+    p2 = int(np.argmax(distances))
+
+    return np.asarray([p1, p2], dtype=int)
+
+
+# =============================================================================
+# METRYKI P1/P2
+# =============================================================================
 
 def calculate_point_errors(
     pitch_points_ref: np.ndarray,
     image_points_ref: np.ndarray,
-    h_tv_img2pitch: np.ndarray,
-    h_tv_pitch2img: np.ndarray,
+    h_est_img2pitch: np.ndarray,
+    h_est_pitch2img: np.ndarray,
 ) -> pd.DataFrame:
-    """
-    Liczy błędy TVCalib względem H_GT.
-
-    Nie używamy calibrator.project_point_to_pitch(), bo ten helper odrzuca
-    punkty poza boiskiem. W ewaluacji chcemy zachować duże błędy.
-    """
-    tv_pitch_points = transform_points(
-        h_tv_img2pitch,
-        image_points_ref,
-    )
-
-    tv_image_points = transform_points(
-        h_tv_pitch2img,
-        pitch_points_ref,
-    )
+    """Liczy bledy dla P1/P2 w metrach i w oryginalnych pikselach obrazu."""
+    est_pitch_points = transform_points(h_est_img2pitch, image_points_ref)
+    est_image_points = transform_points(h_est_pitch2img, pitch_points_ref)
 
     valid = (
-        np.isfinite(tv_pitch_points).all(axis=1)
-        & np.isfinite(tv_image_points).all(axis=1)
+        np.isfinite(est_pitch_points).all(axis=1)
+        & np.isfinite(est_image_points).all(axis=1)
     )
 
     pitch_ref_valid = pitch_points_ref[valid]
     image_ref_valid = image_points_ref[valid]
-    tv_pitch_valid = tv_pitch_points[valid]
-    tv_image_valid = tv_image_points[valid]
+    est_pitch_valid = est_pitch_points[valid]
+    est_image_valid = est_image_points[valid]
 
-    pitch_errors = np.linalg.norm(
-        tv_pitch_valid - pitch_ref_valid,
-        axis=1,
-    )
-
-    reprojection_errors = np.linalg.norm(
-        tv_image_valid - image_ref_valid,
-        axis=1,
-    )
+    pitch_errors = np.linalg.norm(est_pitch_valid - pitch_ref_valid, axis=1)
+    reprojection_errors = np.linalg.norm(est_image_valid - image_ref_valid, axis=1)
 
     return pd.DataFrame(
         {
@@ -441,61 +381,19 @@ def calculate_point_errors(
             "ref_pitch_y_m": pitch_ref_valid[:, 1],
             "ref_image_x_px": image_ref_valid[:, 0],
             "ref_image_y_px": image_ref_valid[:, 1],
-            "tvcalib_pitch_x_m": tv_pitch_valid[:, 0],
-            "tvcalib_pitch_y_m": tv_pitch_valid[:, 1],
-            "tvcalib_image_x_px": tv_image_valid[:, 0],
-            "tvcalib_image_y_px": tv_image_valid[:, 1],
+            "estimated_pitch_x_m": est_pitch_valid[:, 0],
+            "estimated_pitch_y_m": est_pitch_valid[:, 1],
+            "estimated_image_x_px": est_image_valid[:, 0],
+            "estimated_image_y_px": est_image_valid[:, 1],
             "pitch_error_m": pitch_errors,
             "reprojection_error_px": reprojection_errors,
         }
     )
 
 
-def choose_visualization_indices(
-    image_points_ref: np.ndarray,
-    count: int,
-) -> np.ndarray:
-    """
-    Wybiera kilka możliwie dobrze rozdzielonych punktów do PNG.
-    """
-    n = len(image_points_ref)
-
-    if n == 0 or count <= 0:
-        return np.empty((0,), dtype=int)
-
-    count = min(count, n)
-
-    center = image_points_ref.mean(axis=0)
-    first = int(
-        np.argmin(
-            np.linalg.norm(image_points_ref - center, axis=1)
-        )
-    )
-
-    selected = [first]
-
-    while len(selected) < count:
-        candidates = [i for i in range(n) if i not in selected]
-
-        best_idx = None
-        best_distance = -1.0
-
-        for idx in candidates:
-            distance = min(
-                np.linalg.norm(
-                    image_points_ref[idx] - image_points_ref[s]
-                )
-                for s in selected
-            )
-
-            if distance > best_distance:
-                best_distance = distance
-                best_idx = idx
-
-        selected.append(int(best_idx))
-
-    return np.asarray(selected, dtype=int)
-
+# =============================================================================
+# WIZUALIZACJA
+# =============================================================================
 
 def draw_projected_pitch(
     ax,
@@ -505,30 +403,20 @@ def draw_projected_pitch(
     linestyle: str,
     label: str,
 ) -> None:
-    """
-    Rysuje model boiska na klatce.
-    """
     first = True
-
-    for poly_world in pitch_drawing_polylines(
-        pitch_length,
-        pitch_width,
-    ):
+    for poly_world in pitch_drawing_polylines(pitch_length, pitch_width):
         poly_img = transform_points(h_pitch2img, poly_world)
         finite = np.isfinite(poly_img).all(axis=1)
-
         if not finite.any():
             continue
-
         ax.plot(
             poly_img[finite, 0],
             poly_img[finite, 1],
             linestyle=linestyle,
             linewidth=1.0,
-            alpha=0.70,
+            alpha=0.75,
             label=label if first else None,
         )
-
         first = False
 
 
@@ -536,63 +424,36 @@ def create_visualization(
     image_bgr: np.ndarray,
     eval_stem: str,
     h_gt_pitch2img: np.ndarray,
-    h_tv_pitch2img: np.ndarray,
+    h_est_pitch2img: np.ndarray,
     point_df: pd.DataFrame,
     output_path: Path,
     pitch_length: float,
     pitch_width: float,
-    num_vis_points: int,
 ) -> None:
     """
-    Lewo:
-        obraz + projekcja H_GT i TVCalib,
-        mały punkt referencyjny i TVCalib reprojection.
+    Prosta wizualizacja identyczna metodologicznie jak dla keypoints.
 
-    Prawo:
-        punkt referencyjny na boisku oraz punkt otrzymany z TVCalib.
-
-    Markery są celowo mniejsze niż w generate_homography_gt.py.
+    Legenda:
+    - lewy panel: H_GT, H_est, P1/P2 - GT, P1/P2 - H_est,
+    - prawy panel: GT, H_est.
     """
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
     h_img, w_img = image_bgr.shape[:2]
 
-    pitch_ref = point_df[
-        ["ref_pitch_x_m", "ref_pitch_y_m"]
-    ].to_numpy(dtype=np.float64)
-
-    image_ref = point_df[
-        ["ref_image_x_px", "ref_image_y_px"]
-    ].to_numpy(dtype=np.float64)
-
-    tv_pitch = point_df[
-        ["tvcalib_pitch_x_m", "tvcalib_pitch_y_m"]
-    ].to_numpy(dtype=np.float64)
-
-    tv_image = point_df[
-        ["tvcalib_image_x_px", "tvcalib_image_y_px"]
-    ].to_numpy(dtype=np.float64)
-
-    pitch_errors = point_df[
-        "pitch_error_m"
-    ].to_numpy(dtype=np.float64)
-
-    reprojection_errors = point_df[
-        "reprojection_error_px"
-    ].to_numpy(dtype=np.float64)
-
-    vis_ids = choose_visualization_indices(
-        image_ref,
-        num_vis_points,
-    )
+    ref_pitch = point_df[["ref_pitch_x_m", "ref_pitch_y_m"]].to_numpy(float)
+    ref_image = point_df[["ref_image_x_px", "ref_image_y_px"]].to_numpy(float)
+    est_pitch = point_df[["estimated_pitch_x_m", "estimated_pitch_y_m"]].to_numpy(float)
+    est_image = point_df[["estimated_image_x_px", "estimated_image_y_px"]].to_numpy(float)
+    pitch_errors = point_df["pitch_error_m"].to_numpy(float)
+    reproj_errors = point_df["reprojection_error_px"].to_numpy(float)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
     ax_img, ax_pitch = axes
 
-    # LEWY PANEL ------------------------------------------------------
     ax_img.imshow(image_rgb)
     ax_img.set_xlim(0, w_img)
     ax_img.set_ylim(h_img, 0)
-    ax_img.set_title(f"{eval_stem}: H_GT vs TVCalib")
+    ax_img.set_title("Porownanie odwzorowania na obrazie")
     ax_img.axis("off")
 
     draw_projected_pitch(
@@ -601,122 +462,95 @@ def create_visualization(
         pitch_length,
         pitch_width,
         linestyle="-",
-        label="H_GT pitch projection",
+        label="H_GT",
     )
-
     draw_projected_pitch(
         ax_img,
-        h_tv_pitch2img,
+        h_est_pitch2img,
         pitch_length,
         pitch_width,
         linestyle="--",
-        label="TVCalib pitch projection",
+        label="H_est",
     )
 
-    if len(vis_ids):
-        ref_uv = image_ref[vis_ids]
-        tv_uv = tv_image[vis_ids]
-
-        ax_img.scatter(
-            ref_uv[:, 0],
-            ref_uv[:, 1],
-            s=24,
-            marker="o",
-            label="reference pixel (GT)",
-            zorder=5,
-        )
-
-        ax_img.scatter(
-            tv_uv[:, 0],
-            tv_uv[:, 1],
-            s=28,
-            marker="x",
-            linewidths=1.4,
-            label="TVCalib reprojection",
-            zorder=6,
-        )
-
-        for local_i, point_idx in enumerate(vis_ids, start=1):
-            ref = image_ref[point_idx]
-            est = tv_image[point_idx]
-
-            ax_img.plot(
-                [ref[0], est[0]],
-                [ref[1], est[1]],
-                linewidth=0.9,
-                alpha=0.7,
-            )
-
-            ax_img.annotate(
-                f"P{local_i}: {reprojection_errors[point_idx]:.1f}px",
-                (ref[0], ref[1]),
-                xytext=(5, -10),
-                textcoords="offset points",
-                fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.18", alpha=0.65),
-            )
-
-    ax_img.legend(loc="lower left", fontsize=8)
-
-    # PRAWY PANEL -----------------------------------------------------
-    draw_top_down_pitch(
-        ax_pitch,
-        pitch_length,
-        pitch_width,
+    ax_img.scatter(
+        ref_image[:, 0],
+        ref_image[:, 1],
+        s=34,
+        marker="o",
+        label="P1/P2 - GT",
+        zorder=6,
+    )
+    ax_img.scatter(
+        est_image[:, 0],
+        est_image[:, 1],
+        s=42,
+        marker="x",
+        linewidths=1.5,
+        label="P1/P2 - H_est",
+        zorder=7,
     )
 
-    ax_pitch.set_title("Reference pitch point vs TVCalib result")
-
-    if len(vis_ids):
-        ref_xy = pitch_ref[vis_ids]
-        tv_xy = tv_pitch[vis_ids]
-
-        ax_pitch.scatter(
-            ref_xy[:, 0],
-            ref_xy[:, 1],
-            s=26,
-            marker="o",
-            label="GT reference",
-            zorder=5,
+    for i in range(len(point_df)):
+        label = f"P{i + 1}"
+        ax_img.plot(
+            [ref_image[i, 0], est_image[i, 0]],
+            [ref_image[i, 1], est_image[i, 1]],
+            linewidth=0.9,
+            alpha=0.8,
+        )
+        ax_img.annotate(
+            f"{label}: {reproj_errors[i]:.1f} px",
+            (ref_image[i, 0], ref_image[i, 1]),
+            xytext=(5, -12),
+            textcoords="offset points",
+            fontsize=8,
+            bbox=dict(boxstyle="round,pad=0.18", alpha=0.65),
         )
 
-        ax_pitch.scatter(
-            tv_xy[:, 0],
-            tv_xy[:, 1],
-            s=30,
-            marker="x",
-            linewidths=1.5,
-            label="TVCalib",
-            zorder=6,
+    ax_img.legend(loc="lower left", fontsize=8, ncol=2)
+
+    draw_top_down_pitch(ax_pitch, pitch_length, pitch_width)
+    ax_pitch.set_title("Blad odwzorowania na plaszczyznie boiska")
+
+    ax_pitch.scatter(
+        ref_pitch[:, 0],
+        ref_pitch[:, 1],
+        s=34,
+        marker="o",
+        label="GT",
+        zorder=6,
+    )
+    ax_pitch.scatter(
+        est_pitch[:, 0],
+        est_pitch[:, 1],
+        s=42,
+        marker="x",
+        linewidths=1.5,
+        label="H_est",
+        zorder=7,
+    )
+
+    for i in range(len(point_df)):
+        label = f"P{i + 1}"
+        ax_pitch.plot(
+            [ref_pitch[i, 0], est_pitch[i, 0]],
+            [ref_pitch[i, 1], est_pitch[i, 1]],
+            linewidth=0.9,
+            alpha=0.8,
         )
-
-        for local_i, point_idx in enumerate(vis_ids, start=1):
-            ref = pitch_ref[point_idx]
-            est = tv_pitch[point_idx]
-
-            ax_pitch.plot(
-                [ref[0], est[0]],
-                [ref[1], est[1]],
-                linewidth=0.9,
-                alpha=0.7,
-            )
-
-            ax_pitch.annotate(
-                f"P{local_i}: {pitch_errors[point_idx]:.2f} m",
-                (ref[0], ref[1]),
-                xytext=(5, 5),
-                textcoords="offset points",
-                fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.18", alpha=0.65),
-            )
+        ax_pitch.annotate(
+            f"{label}: {pitch_errors[i]:.2f} m",
+            (ref_pitch[i, 0], ref_pitch[i, 1]),
+            xytext=(5, 5),
+            textcoords="offset points",
+            fontsize=8,
+            bbox=dict(boxstyle="round,pad=0.18", alpha=0.65),
+        )
 
     ax_pitch.legend(loc="upper right", fontsize=8)
 
-    fig.suptitle(
-        "TVCalib homography evaluation against annotation-derived H_GT",
-        fontsize=14,
-    )
-
+    fig.suptitle(f"{eval_stem} - ewaluacja TVCalib dla P1 i P2", fontsize=13)
     fig.tight_layout()
     fig.savefig(output_path, dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -733,19 +567,16 @@ def evaluate_one(
     output_dir: Path,
     args: argparse.Namespace,
 ) -> Tuple[dict, pd.DataFrame]:
-
     eval_id = sample["eval_id"]
     eval_stem = sample["eval_stem"]
     image_path = sample["image_path"]
     gt_path = sample["gt_path"]
 
     image_bgr = cv2.imread(str(image_path))
-
     if image_bgr is None:
-        raise RuntimeError(f"OpenCV nie może odczytać: {image_path}")
+        raise RuntimeError(f"OpenCV nie moze odczytac: {image_path}")
 
     image_height, image_width = image_bgr.shape[:2]
-
     if (
         image_width != calibrator.image_width
         or image_height != calibrator.image_height
@@ -760,7 +591,7 @@ def evaluate_one(
     h_gt_img2pitch = gt["_H_image_to_pitch"]
     h_gt_pitch2img = gt["_H_pitch_to_image"]
 
-    pitch_points_ref, image_points_ref = visible_reference_points(
+    pitch_candidates, image_candidates = visible_reference_points(
         pitch_grid=pitch_grid,
         h_gt_pitch2img=h_gt_pitch2img,
         image_width=image_width,
@@ -768,94 +599,94 @@ def evaluate_one(
         image_margin_px=args.image_margin_px,
     )
 
-    if len(pitch_points_ref) < 4:
+    if len(pitch_candidates) < NUM_EVAL_POINTS:
         raise RuntimeError(
-            f"{eval_stem}: tylko {len(pitch_points_ref)} widoczne punkty testowe."
+            f"{eval_stem}: tylko {len(pitch_candidates)} widoczne punkty-kandydaci."
         )
 
-    # TVCalib — ta sama publiczna metoda co w pipeline.
-    # Mierzymy segmentację + kalibrację, bez inicjalizacji modelu.
+    eval_indices = choose_evaluation_indices(image_candidates)
+    pitch_points_ref = pitch_candidates[eval_indices]
+    image_points_ref = image_candidates[eval_indices]
+
+    # Pelny etap TVCalib: segmentacja + kalibracja.
+    # Inicjalizacja i warm-up sa poza pomiarem.
     sync_cuda()
     t0 = time.perf_counter()
-
-    h_tv_img2pitch_raw = calibrator.get_homography(str(image_path))
-
+    h_est_img2pitch_raw = calibrator.get_homography(str(image_path))
     sync_cuda()
     estimation_time_ms = (time.perf_counter() - t0) * 1000.0
 
-    if h_tv_img2pitch_raw is None:
+    base_row = {
+        "eval_id": eval_id,
+        "eval_stem": eval_stem,
+        "estimation_time_ms": estimation_time_ms,
+        "n_candidate_points": len(pitch_candidates),
+        "n_evaluation_points": NUM_EVAL_POINTS,
+    }
+
+    if h_est_img2pitch_raw is None:
         return (
             {
-                "eval_id": eval_id,
-                "eval_stem": eval_stem,
+                **base_row,
                 "status": "failed",
-                "estimation_time_ms": estimation_time_ms,
-                "n_reference_points": len(pitch_points_ref),
-                "n_valid_points": 0,
+                "failure_reason": "tvcalib_returned_none",
                 "mean_pitch_error_m": np.nan,
                 "median_pitch_error_m": np.nan,
-                "p90_pitch_error_m": np.nan,
-                "max_pitch_error_m": np.nan,
                 "mean_reprojection_error_px": np.nan,
                 "median_reprojection_error_px": np.nan,
-                "p90_reprojection_error_px": np.nan,
-                "max_reprojection_error_px": np.nan,
+                "p1_pitch_error_m": np.nan,
+                "p2_pitch_error_m": np.nan,
+                "p1_reprojection_error_px": np.nan,
+                "p2_reprojection_error_px": np.nan,
                 "error": "TVCalibHomography.get_homography() returned None",
             },
             pd.DataFrame(),
         )
 
-    h_tv_img2pitch = normalize_h(h_tv_img2pitch_raw)
-    h_tv_pitch2img = normalize_h(np.linalg.inv(h_tv_img2pitch))
+    h_est_img2pitch = normalize_h(h_est_img2pitch_raw)
+    h_est_pitch2img = normalize_h(np.linalg.inv(h_est_img2pitch))
 
     point_df = calculate_point_errors(
         pitch_points_ref=pitch_points_ref,
         image_points_ref=image_points_ref,
-        h_tv_img2pitch=h_tv_img2pitch,
-        h_tv_pitch2img=h_tv_pitch2img,
+        h_est_img2pitch=h_est_img2pitch,
+        h_est_pitch2img=h_est_pitch2img,
     )
 
-    if point_df.empty:
+    if len(point_df) != NUM_EVAL_POINTS:
         raise RuntimeError(
-            f"{eval_stem}: TVCalib zwrócił H, ale brak skończonych punktów."
+            f"{eval_stem}: oczekiwano {NUM_EVAL_POINTS} poprawnych P1/P2, "
+            f"otrzymano {len(point_df)}."
         )
 
-    point_df.insert(0, "point_id", np.arange(1, len(point_df) + 1))
+    point_df.insert(0, "point_label", ["P1", "P2"])
+    point_df.insert(0, "point_id", [1, 2])
+    point_df.insert(0, "method", "tvcalib")
     point_df.insert(0, "eval_stem", eval_stem)
     point_df.insert(0, "eval_id", eval_id)
-    point_df.insert(3, "method", "tvcalib")
 
     pitch_errors = point_df["pitch_error_m"].to_numpy(dtype=np.float64)
     reproj_errors = point_df["reprojection_error_px"].to_numpy(dtype=np.float64)
 
     row = {
-        "eval_id": eval_id,
-        "eval_stem": eval_stem,
+        **base_row,
         "status": "ok",
-        "estimation_time_ms": estimation_time_ms,
-        "n_reference_points": len(pitch_points_ref),
-        "n_valid_points": len(point_df),
-
+        "failure_reason": "",
         "mean_pitch_error_m": float(np.mean(pitch_errors)),
         "median_pitch_error_m": float(np.median(pitch_errors)),
-        "p90_pitch_error_m": percentile(pitch_errors, 90),
-        "max_pitch_error_m": float(np.max(pitch_errors)),
-
         "mean_reprojection_error_px": float(np.mean(reproj_errors)),
         "median_reprojection_error_px": float(np.median(reproj_errors)),
-        "p90_reprojection_error_px": percentile(reproj_errors, 90),
-        "max_reprojection_error_px": float(np.max(reproj_errors)),
-
+        "p1_pitch_error_m": float(pitch_errors[0]),
+        "p2_pitch_error_m": float(pitch_errors[1]),
+        "p1_reprojection_error_px": float(reproj_errors[0]),
+        "p2_reprojection_error_px": float(reproj_errors[1]),
         "error": "",
     }
-
-    row.update(flatten_h("H_tv_img2pitch", h_tv_img2pitch))
+    row.update(flatten_h("H_tvcalib_img2pitch", h_est_img2pitch))
     row.update(flatten_h("H_gt_img2pitch", h_gt_img2pitch))
 
-    # Zapis oszacowanej H --------------------------------------------
     homography_dir = output_dir / "estimated_homographies"
     homography_dir.mkdir(parents=True, exist_ok=True)
-
     h_json_path = homography_dir / f"{eval_stem}_tvcalib.json"
 
     with h_json_path.open("w", encoding="utf-8") as f:
@@ -867,31 +698,38 @@ def evaluate_one(
                 "optim_steps": args.optim_steps,
                 "lens_dist": bool(args.lens_dist),
                 "estimation_time_ms": estimation_time_ms,
-                "H_image_to_pitch": h_tv_img2pitch.tolist(),
-                "H_pitch_to_image": h_tv_pitch2img.tolist(),
+                "H_image_to_pitch": h_est_img2pitch.tolist(),
+                "H_pitch_to_image": h_est_pitch2img.tolist(),
+                "evaluation_points": point_df[
+                    [
+                        "point_label",
+                        "ref_pitch_x_m",
+                        "ref_pitch_y_m",
+                        "ref_image_x_px",
+                        "ref_image_y_px",
+                        "pitch_error_m",
+                        "reprojection_error_px",
+                    ]
+                ].to_dict("records"),
             },
             f,
             indent=2,
             ensure_ascii=False,
         )
 
-    # Wizualizacja ----------------------------------------------------
     if not args.no_visualizations:
         vis_dir = output_dir / "visualizations"
         vis_dir.mkdir(parents=True, exist_ok=True)
-
-        vis_path = vis_dir / f"{eval_stem}_tvcalib_vs_gt.png"
-
+        vis_path = vis_dir / f"{eval_stem}_tvcalib_vs_gt_p1p2.png"
         create_visualization(
             image_bgr=image_bgr,
             eval_stem=eval_stem,
             h_gt_pitch2img=h_gt_pitch2img,
-            h_tv_pitch2img=h_tv_pitch2img,
+            h_est_pitch2img=h_est_pitch2img,
             point_df=point_df,
             output_path=vis_path,
             pitch_length=PITCH_LENGTH_M,
             pitch_width=PITCH_WIDTH_M,
-            num_vis_points=args.num_vis_points,
         )
 
     return row, point_df
@@ -905,64 +743,41 @@ def build_summary(
     per_frame: pd.DataFrame,
     point_errors: pd.DataFrame,
 ) -> pd.DataFrame:
-
     total_frames = len(per_frame)
     successful = per_frame[per_frame["status"] == "ok"].copy()
+
+    finite_times = per_frame["estimation_time_ms"].to_numpy(dtype=np.float64)
+    finite_times = finite_times[np.isfinite(finite_times)]
 
     summary = {
         "method": "tvcalib",
         "total_frames": total_frames,
         "successful_frames": len(successful),
         "failed_frames": total_frames - len(successful),
-        "success_rate": (
-            len(successful) / total_frames
-            if total_frames
-            else 0.0
+        "success_rate": len(successful) / total_frames if total_frames else 0.0,
+        "total_evaluation_points": int(len(point_errors)),
+        "mean_pitch_error_m": np.nan,
+        "median_pitch_error_m": np.nan,
+        "mean_reprojection_error_px": np.nan,
+        "median_reprojection_error_px": np.nan,
+        # Tak samo jak dla keypoints: czas po wszystkich probach z dostepnym timingiem.
+        "mean_estimation_time_ms": (
+            float(np.mean(finite_times)) if finite_times.size else np.nan
+        ),
+        "median_estimation_time_ms": (
+            float(np.median(finite_times)) if finite_times.size else np.nan
         ),
     }
 
-    if not successful.empty:
-        pitch_values = point_errors[
-            "pitch_error_m"
-        ].to_numpy(dtype=np.float64)
-
-        reproj_values = point_errors[
-            "reprojection_error_px"
-        ].to_numpy(dtype=np.float64)
-
-        time_values = successful[
-            "estimation_time_ms"
-        ].to_numpy(dtype=np.float64)
-
+    if not point_errors.empty:
+        pitch_values = point_errors["pitch_error_m"].to_numpy(dtype=np.float64)
+        reproj_values = point_errors["reprojection_error_px"].to_numpy(dtype=np.float64)
         summary.update(
             {
                 "mean_pitch_error_m": float(np.mean(pitch_values)),
                 "median_pitch_error_m": float(np.median(pitch_values)),
-                "p90_pitch_error_m": percentile(pitch_values, 90),
-
                 "mean_reprojection_error_px": float(np.mean(reproj_values)),
                 "median_reprojection_error_px": float(np.median(reproj_values)),
-                "p90_reprojection_error_px": percentile(reproj_values, 90),
-
-                "mean_estimation_time_ms": float(np.mean(time_values)),
-                "median_estimation_time_ms": float(np.median(time_values)),
-
-                "total_evaluation_points": int(len(point_errors)),
-            }
-        )
-
-    else:
-        summary.update(
-            {
-                "mean_pitch_error_m": np.nan,
-                "median_pitch_error_m": np.nan,
-                "p90_pitch_error_m": np.nan,
-                "mean_reprojection_error_px": np.nan,
-                "median_reprojection_error_px": np.nan,
-                "p90_reprojection_error_px": np.nan,
-                "mean_estimation_time_ms": np.nan,
-                "median_estimation_time_ms": np.nan,
-                "total_evaluation_points": 0,
             }
         )
 
@@ -977,51 +792,43 @@ def main() -> None:
     args = parse_args()
 
     if args.optim_steps <= 0:
-        raise ValueError("--optim-steps musi być > 0.")
+        raise ValueError("--optim-steps musi byc > 0.")
     if args.grid_step_m <= 0:
-        raise ValueError("--grid-step-m musi być > 0.")
+        raise ValueError("--grid-step-m musi byc > 0.")
     if args.pitch_margin_m < 0:
-        raise ValueError("--pitch-margin-m nie może być ujemny.")
+        raise ValueError("--pitch-margin-m nie moze byc ujemny.")
     if args.image_margin_px < 0:
-        raise ValueError("--image-margin-px nie może być ujemny.")
-    if args.num_vis_points < 1:
-        raise ValueError("--num-vis-points musi być >= 1.")
+        raise ValueError("--image-margin-px nie moze byc ujemny.")
 
     ensure_exists(TVCALIB_WEIGHTS, "wag TVCalib train_59.pt")
 
     manifest = load_manifest()
-    samples = select_samples(
-        manifest=manifest,
-        mode=args.mode,
-        eval_id=args.eval_id,
-    )
+    samples = select_samples(manifest, args.mode, args.eval_id)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_dir = RESULTS_ROOT / timestamp
+    output_dir = RESULTS_ROOT / f"{timestamp}_tvcalib_p1p2"
     output_dir.mkdir(parents=True, exist_ok=False)
 
     first_image = cv2.imread(str(samples[0]["image_path"]))
     if first_image is None:
-        raise RuntimeError(
-            f"Nie udało się odczytać {samples[0]['image_path']}"
-        )
-
+        raise RuntimeError(f"Nie udalo sie odczytac {samples[0]['image_path']}")
     image_height, image_width = first_image.shape[:2]
 
     print("========================================")
-    print("EWALUACJA HOMOGRAFII — TVCALIB")
+    print("EWALUACJA HOMOGRAFII - TVCALIB - P1/P2")
     print("========================================")
     print(f"Tryb: {args.mode}")
     print(f"Liczba klatek: {len(samples)}")
-    print(f"Rozdzielczość: {image_width}x{image_height}")
+    print(f"Oryginalna rozdzielczosc: {image_width}x{image_height}")
+    print("Zewnetrzny resize: brak (TVCalib obsluguje preprocessing wewnetrznie)")
     print(f"OPTIM_STEPS: {args.optim_steps}")
     print(f"lens_dist: {args.lens_dist}")
-    print(f"Grid step: {args.grid_step_m} m")
-    print(f"Pitch margin: {args.pitch_margin_m} m")
-    print(f"Wyniki: {output_dir}")
-    print()
+    print(f"Punkty ewaluacyjne: P1/P2 ({NUM_EVAL_POINTS} na udana klatke)")
+    print("Blad reprojekcji [px]: oryginalna przestrzen obrazu")
+    print("Blad pitch [m]: plaszczyzna boiska")
+    print(f"Wyniki: {output_dir}\n")
 
-    # Identycznie jak w pipeline:
+    # Ta sama klasa i parametry jak w pipeline. Nie wykonujemy stretchu 640x640.
     calibrator = TVCalibHomography(
         model_weights=str(TVCALIB_WEIGHTS),
         image_width=image_width,
@@ -1037,12 +844,18 @@ def main() -> None:
         margin_m=args.pitch_margin_m,
     )
 
+    # Dla porownywalnosci z keypoints pierwszy pelny przebieg jest warm-upem
+    # i nie wchodzi do pomiaru czasu.
+    print("Warm-up TVCalib...")
+    _ = calibrator.get_homography(str(samples[0]["image_path"]))
+    sync_cuda()
+    print("Warm-up gotowy.\n")
+
     per_frame_rows: List[dict] = []
     point_tables: List[pd.DataFrame] = []
 
     for index, sample in enumerate(samples, start=1):
         eval_stem = sample["eval_stem"]
-
         print(
             f"[{index:03d}/{len(samples):03d}] {eval_stem} ...",
             end=" ",
@@ -1057,41 +870,48 @@ def main() -> None:
                 output_dir=output_dir,
                 args=args,
             )
-
         except Exception as exc:
             row = {
                 "eval_id": sample["eval_id"],
                 "eval_stem": eval_stem,
                 "status": "failed",
+                "failure_reason": "exception",
                 "estimation_time_ms": np.nan,
-                "n_reference_points": np.nan,
-                "n_valid_points": 0,
+                "n_candidate_points": np.nan,
+                "n_evaluation_points": NUM_EVAL_POINTS,
                 "mean_pitch_error_m": np.nan,
                 "median_pitch_error_m": np.nan,
-                "p90_pitch_error_m": np.nan,
-                "max_pitch_error_m": np.nan,
                 "mean_reprojection_error_px": np.nan,
                 "median_reprojection_error_px": np.nan,
-                "p90_reprojection_error_px": np.nan,
-                "max_reprojection_error_px": np.nan,
+                "p1_pitch_error_m": np.nan,
+                "p2_pitch_error_m": np.nan,
+                "p1_reprojection_error_px": np.nan,
+                "p2_reprojection_error_px": np.nan,
                 "error": f"{type(exc).__name__}: {exc}",
             }
             point_df = pd.DataFrame()
 
         per_frame_rows.append(row)
-
         if not point_df.empty:
             point_tables.append(point_df)
 
         if row["status"] == "ok":
             print(
-                f"OK | "
-                f"pitch={row['mean_pitch_error_m']:.3f} m | "
-                f"reproj={row['mean_reprojection_error_px']:.2f} px | "
+                f"OK | P1/P2 pitch mean={row['mean_pitch_error_m']:.3f} m | "
+                f"reproj mean={row['mean_reprojection_error_px']:.2f} px | "
                 f"time={row['estimation_time_ms']:.1f} ms"
             )
         else:
-            print(f"FAILED | {row.get('error', '')}")
+            if np.isfinite(row.get("estimation_time_ms", np.nan)):
+                print(
+                    f"FAILED | reason={row['failure_reason']} | "
+                    f"time={row['estimation_time_ms']:.1f} ms"
+                )
+            else:
+                print(
+                    f"FAILED | reason={row['failure_reason']} | "
+                    f"{row.get('error', '')}"
+                )
 
     per_frame_df = (
         pd.DataFrame(per_frame_rows)
@@ -1110,25 +930,23 @@ def main() -> None:
             columns=[
                 "eval_id",
                 "eval_stem",
-                "point_id",
                 "method",
+                "point_id",
+                "point_label",
                 "ref_pitch_x_m",
                 "ref_pitch_y_m",
                 "ref_image_x_px",
                 "ref_image_y_px",
-                "tvcalib_pitch_x_m",
-                "tvcalib_pitch_y_m",
-                "tvcalib_image_x_px",
-                "tvcalib_image_y_px",
+                "estimated_pitch_x_m",
+                "estimated_pitch_y_m",
+                "estimated_image_x_px",
+                "estimated_image_y_px",
                 "pitch_error_m",
                 "reprojection_error_px",
             ]
         )
 
-    summary_df = build_summary(
-        per_frame=per_frame_df,
-        point_errors=point_errors_df,
-    )
+    summary_df = build_summary(per_frame_df, point_errors_df)
 
     per_frame_path = output_dir / "per_frame_metrics.csv"
     point_errors_path = output_dir / "point_errors.csv"
@@ -1145,63 +963,78 @@ def main() -> None:
         "eval_id": args.eval_id if args.mode == "single" else None,
         "dataset_root": str(EVAL_ROOT),
         "tvcalib_weights": str(TVCALIB_WEIGHTS),
-        "image_width": image_width,
-        "image_height": image_height,
-        "optim_steps": args.optim_steps,
+        "original_first_image_width": image_width,
+        "original_first_image_height": image_height,
+        "external_resize": False,
+        "preprocessing": "handled internally by TVCalibHomography",
+        "optim_steps": int(args.optim_steps),
         "lens_dist": bool(args.lens_dist),
+        "homography_direction": "image pixels -> pitch meters",
         "pitch_length_m": PITCH_LENGTH_M,
         "pitch_width_m": PITCH_WIDTH_M,
-        "grid_step_m": args.grid_step_m,
-        "pitch_margin_m": args.pitch_margin_m,
-        "image_margin_px": args.image_margin_px,
-        "num_visualization_points": args.num_vis_points,
-        "visualizations": not args.no_visualizations,
+        "candidate_grid_step_m": args.grid_step_m,
+        "candidate_pitch_margin_m": args.pitch_margin_m,
+        "candidate_image_margin_px": args.image_margin_px,
+        "evaluation_points_per_successful_frame": NUM_EVAL_POINTS,
+        "evaluation_points_selection": (
+            "P1 = visible H_GT grid point nearest centroid of visible candidate "
+            "points in the original image; P2 = visible candidate farthest from "
+            "P1 in the original image. Selection uses H_GT only and is independent "
+            "of the evaluated homography method."
+        ),
+        "reprojection_error_space": "original image pixel coordinates",
+        "pitch_error_space": "pitch coordinates in meters",
         "success_definition": (
-            "TVCalib independently returns a finite, invertible homography "
-            "for the evaluated frame; no previous-frame fallback is used."
+            "TVCalib independently returns a finite, invertible image-to-pitch H "
+            "and both P1/P2 can be evaluated. No previous-frame fallback."
         ),
         "timing_definition": (
-            "TVCalib get_homography() only: segmentation + calibration. "
-            "Model initialization is excluded."
+            "TVCalib get_homography(): segmentation + calibration. Model "
+            "initialization and warm-up excluded. Summary timing uses all frames "
+            "with a finite timing value, including failed estimation attempts."
         ),
+        "main_error_aggregation": (
+            "Mean and median over P1/P2 from all successful frames. "
+            "Each successful frame contributes exactly two error observations."
+        ),
+        "visualizations": not args.no_visualizations,
     }
 
     with (output_dir / "config.json").open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
     summary = summary_df.iloc[0]
-
     print("\n========================================")
-    print("PODSUMOWANIE TVCALIB")
+    print("PODSUMOWANIE TVCALIB - P1/P2")
     print("========================================")
     print(
-        f"Success rate: "
-        f"{100.0 * summary['success_rate']:.2f}% "
-        f"({int(summary['successful_frames'])}/"
-        f"{int(summary['total_frames'])})"
+        f"Success rate: {100.0 * summary['success_rate']:.2f}% "
+        f"({int(summary['successful_frames'])}/{int(summary['total_frames'])})"
+    )
+    print(
+        f"Liczba punktow P1/P2 w metrykach: "
+        f"{int(summary['total_evaluation_points'])}"
     )
 
     if int(summary["successful_frames"]) > 0:
         print(
-            f"Pitch error: mean="
-            f"{summary['mean_pitch_error_m']:.3f} m, "
+            f"Pitch error P1/P2: mean={summary['mean_pitch_error_m']:.3f} m, "
             f"median={summary['median_pitch_error_m']:.3f} m"
         )
         print(
-            f"Reprojection error: mean="
-            f"{summary['mean_reprojection_error_px']:.2f} px, "
+            f"Reprojection error P1/P2: "
+            f"mean={summary['mean_reprojection_error_px']:.2f} px, "
             f"median={summary['median_reprojection_error_px']:.2f} px"
         )
         print(
-            f"Estimation time: mean="
-            f"{summary['mean_estimation_time_ms']:.1f} ms, "
+            f"Estimation time (all attempts): "
+            f"mean={summary['mean_estimation_time_ms']:.1f} ms, "
             f"median={summary['median_estimation_time_ms']:.1f} ms"
         )
 
     print(f"\nSummary:   {summary_path}")
     print(f"Per-frame: {per_frame_path}")
-    print(f"Points:    {point_errors_path}")
-
+    print(f"P1/P2:     {point_errors_path}")
     if not args.no_visualizations:
         print(f"Visualizations: {output_dir / 'visualizations'}")
 
