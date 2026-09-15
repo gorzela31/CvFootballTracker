@@ -1,4 +1,7 @@
 """
+Plik: src/visualization/__init__.py
+
+Opis:
 Modul wizualizacji dla pipeline'u CvFootballTracker.
 """
 

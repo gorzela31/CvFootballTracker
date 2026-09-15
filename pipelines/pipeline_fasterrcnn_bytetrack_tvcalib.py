@@ -2,31 +2,11 @@
 Plik: pipelines/pipeline_fasterrcnn_bytetrack_tvcalib.py
 
 Opis:
-    Pipeline detekcja -> tracking -> kalibracja -> projekcja na boisko.
+    Pipeline Faster R-CNN -> ByteTrack -> TVCalib.
 
-    Komponenty:
-        Detekcja:    Faster R-CNN ResNet50-FPN v2 (fine-tuned na SoccerNet, 3 klasy)
-        Tracking:    ByteTrack (supervision)
-        Kalibracja:  TVCalib z dynamiczna rekalibracja co CALIB_STRIDE klatek
-        Projekcja:   pozycje stop (srodek dolnej krawedzi bbox) -> metry na boisku
-        Wizualizacja: minimapa boiska w ciemnym motywie obok klatki glownej
-
-    Wejscie:
-        Katalog z klatkami SoccerNet: SNMOT-XXX/img1/*.jpg
-
-    Wyjscie (w results/<RUN_NAME>/):
-        - output.mp4   : wideo z bboxami, klasami, ID trackow oraz minimapa
-        - tracks.csv   : pozycje per (frame, track_id) w pikselach i metrach
-
-Uzycie:
-    # Domyslne sciezki
-    python pipelines/pipeline_fasterrcnn_bytetrack_tvcalib.py
-
-    # Wlasne sciezki
-    python pipelines/pipeline_fasterrcnn_bytetrack_tvcalib.py \
-        --frames data/tracking_dataset/tracking/test/SNMOT-116/img1 \
-        --frcnn-weights models/faster_rcnn/trained_fasterrcnn_resnet50.pt \
-        --conf 0.15 --calib-stride 10
+Przetwarza klatki SoccerNet, wyznacza pozycje obiektow na boisku
+i zapisuje wideo z minimapa oraz CSV z torami. TVCalib odswieza homografie
+co ustalona liczbe klatek.
 """
 
 import argparse

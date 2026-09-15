@@ -1,8 +1,11 @@
 """
-Plik: src/calibration/classical_homography_v2.py
+Plik: src/calibration/classicalApproachPlayground/classical_homography_v2.py
 
 Opis:
-    Klasyczna (bez uczenia) estymacja homografii boiska pilkarskiego.
+    Eksperymentalna, klasyczna (bez uczenia) estymacja homografii boiska.
+
+Opis szczegółowych etapów potoku pozostaje poniżej, ponieważ moduł służy
+również do diagnostyki i porównań z metodami uczonymi.
 
     Potok E2E (jeden obraz -> macierz H 3x3):
         1. Segmentacja pola             segment_field()

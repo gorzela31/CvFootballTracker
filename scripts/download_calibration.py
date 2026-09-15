@@ -1,23 +1,12 @@
 """
-Plik: download_calibration.py
-Opis: Skrypt do pobierania danych 'calibration' z bazy SoccerNet
-      dla treningu i ewaluacji modeli estymacji homografii.
-Funkcjonalność:
-  - Pobiera wybrane splity danych (train, valid, test) z SoccerNet
-  - Zapisuje dane do folderu data/calibration_dataset/calibration/
-  - Każdy split zawiera: obrazy klatek (.jpg), anotacje kalibracji (.json)
-    oraz metadane kamery (match_info_cam_gt.json)
-Bezpieczeństwo:
-  - Domyślnie nic nie pobiera - trzeba odkomentować wybrane splity w kodzie
-  - Wymaga zainstalowanego pakietu SoccerNet (pip install SoccerNet)
-Uwagi dot. rozmiarów:
-  - train  ~12 GB  (używany do treningu modelu segmentacji boiska)
-  - valid  ~1.5 GB (używany do ewaluacji i doboru hiperparametrów)
-  - test   ~1.5 GB (bez ground truth - do submisji challenge)
-Użycie:
-  1. Ustaw zmienną SOCCERNET_PASSWORD (patrz niżej)
-  2. Odkomentuj żądane splity w liście splits_to_download
-  3. Uruchom: python scripts/download_calibration.py
+Plik: scripts/download_calibration.py
+
+Opis:
+    Pobiera wybrane splity zbioru SoccerNet-Calibration.
+
+Dane są zapisywane w `data/calibration_dataset/calibration/`. Lista splitów
+jest domyślnie pusta, aby przypadkowe uruchomienie nie pobrało dużych plików;
+do działania potrzebny jest pakiet SoccerNet i hasło do danych.
 """
 
 import os

@@ -2,25 +2,10 @@
 Plik: src/classification/team_classifier.py
 
 Opis:
-    Klasyfikacja zawodnikow do druzyn na podstawie koloru koszulki.
-    Metoda: K-means (k=2) na srednim kolorze HSV gornej czesci bbox.
+    Przypisuje zawodników do dwóch drużyn na podstawie koloru koszulek.
 
-    Algorytm:
-        1. Dla kazdego gracza (class_id==1) wycinamy gornych 40% bbox (koszulka)
-        2. Obliczamy sredni kolor w przestrzeni HSV (kanaly H, S)
-        3. K-means (k=2) dopasowywany na pierwszej klatce z >=4 graczami
-        4. Kolejne klatki uzywaja predict() na ustalonych centrach klastrow
-
-    Ograniczenia:
-        - Bramkarze moga zostac blednie przypisani (inny kolor koszulki)
-        - Zaklada sie stabilne oswietlenie w obrebie jednego klipu
-
-Uzycie:
-    from src.classification.team_classifier import TeamClassifier
-
-    classifier = TeamClassifier()
-    team_ids = classifier.classify(frame_bgr, detections)
-    # team_ids[i]: 0 lub 1 dla graczy, -1 dla ball/referee
+Klasyfikator wycina górną część bboxów graczy, pracuje na średnim kolorze
+HSV i uczy klastry K-means na pierwszej klatce z wystarczającą liczbą graczy.
 """
 
 import cv2

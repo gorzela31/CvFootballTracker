@@ -2,19 +2,10 @@
 Plik: src/visualization/pitch_drawer.py
 
 Opis:
-    Rysowanie widoku z gory boiska pilkarskiego w wymiarach FIFA
-    (105m x 68m). Generuje wszystkie standardowe oznaczenia: obwod,
-    linia srodkowa, kola srodkowe, pola karne i bramkowe, luki pol
-    karnych ("D"), luki narozne, punkty karne.
+    Rysuje standardowe boisko piłkarskie w rzucie z góry.
 
-    Uklad wspolrzednych: wycentrowany (zgodny z konwencja TVCalib).
-        X w [-52.5, +52.5] m  (dlugosc)
-        Y w [-34.0, +34.0] m  (szerokosc)
-    Y dodatnie rysowane u DOLU obrazu (strona bliska kamery transmisji).
-
-    Klasa zaprojektowana jako reusable - moze byc uzywana zarowno do
-    minimapy (ten plik dalej w module), jak i pozniej do heatmap pozycji,
-    wizualizacji bledu reprojekcji itp.
+`PitchRenderer` odwzorowuje boisko FIFA 105 x 68 m na obraz rastrowy
+w wycentrowanym układzie współrzędnych używanym przez TVCalib.
 """
 
 import math

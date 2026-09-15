@@ -1,48 +1,13 @@
 #!/usr/bin/env python3
 """
-Przygotowanie zamrożonej puli ewaluacyjnej homografii z SoccerNet-Calibration.
+Plik: scripts/prepare_homography_evaluation_dataset.py
 
-Umieść plik jako:
-    CvFootballTracker/scripts/prepare_homography_evaluation_dataset.py
+Opis:
+    Buduje zamrożoną pulę ewaluacyjną homografii z SoccerNet-Calibration.
 
-Domyślne źródło:
-    data/calibration_dataset/test/
-
-Zakładany format źródła:
-    00000.jpg
-    00000.json
-    00001.jpg
-    00001.json
-    ...
-
-Domyślne wyjście:
-    data/data_homography_evaluation/
-        images/
-            eval_homo_001.jpg
-            ...
-        annotations/
-            eval_homo_001.json
-            ...
-        manifest.csv
-        selection_info.json
-
-Działanie:
-    - znajduje pary obraz + JSON o tym samym stemie,
-    - sortuje je naturalnie/numerowo,
-    - wybiera pierwsze 100 kompletnych par,
-    - kopiuje je do osobnego katalogu i zmienia nazwy na eval_homo_001...
-    - zapisuje manifest pozwalający odtworzyć pochodzenie każdej próbki.
-
-UWAGA:
-    Domyślnie skrypt KOPIUJE pliki, aby nie niszczyć źródłowego zbioru testowego.
-    Jeśli naprawdę chcesz je usunąć ze źródła, użyj --move.
-
-Przykłady:
-    python scripts/prepare_homography_evaluation_dataset.py
-
-    python scripts/prepare_homography_evaluation_dataset.py --overwrite
-
-    python scripts/prepare_homography_evaluation_dataset.py --target 100 --move --overwrite
+Znajduje kompletne pary obraz + JSON, sortuje je naturalnie, kopiuje wybraną
+liczbę próbek do osobnego katalogu i zapisuje manifest. Domyślnie pliki są
+kopiowane, a źródłowy zbiór pozostaje bez zmian.
 """
 
 from __future__ import annotations

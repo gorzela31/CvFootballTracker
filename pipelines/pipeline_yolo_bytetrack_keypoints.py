@@ -2,22 +2,11 @@
 Plik: pipelines/pipeline_yolo_bytetrack_keypoints.py
 
 Opis:
-    Pipeline detekcja -> tracking -> kalibracja -> projekcja na boisko.
+    Pipeline YOLOv8n -> ByteTrack -> homografia z keypointow boiska.
 
-    Komponenty:
-        Detekcja:    YOLOv8n (wagi wytrenowane na SoccerNet, 3 klasy)
-        Tracking:    ByteTrack (supervision)
-        Kalibracja:  YOLOv8x-pose (roboflow/sports) + RANSAC homografia,
-                     z dynamiczną rekalibracją co CALIB_STRIDE klatek
-        Projekcja:   pozycje stop (środek dolnej krawędzi bbox) -> metry na boisku
-        Wizualizacja: minimapa boiska w ciemnym motywie obok klatki głównej
-
-    Wejście:
-        Katalog z klatkami SoccerNet: SNMOT-XXX/img1/*.jpg
-
-    Wyjście (w results/<RUN_NAME>/):
-        - output.mp4   : wideo z bboxami, klasami, ID tracków oraz minimapa
-        - tracks.csv   : pozycje per (frame, track_id) w pikselach i metrach
+Przetwarza klatki SoccerNet, rzutuje pozycje obiektow na boisko
+i zapisuje wideo z minimapa oraz CSV z torami. Homografia z YOLOv8-pose
+jest okresowo odswiezana.
 """
 
 import sys

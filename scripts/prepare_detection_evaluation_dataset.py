@@ -1,43 +1,12 @@
 """
-Przygotowanie zróżnicowanej puli ewaluacyjnej detekcji z SoccerNet-Tracking.
+Plik: scripts/prepare_detection_evaluation_dataset.py
 
-Umieść plik jako:
-    CvFootballTracker/scripts/prepare_detection_evaluation_dataset.py
+Opis:
+    Buduje zamrożoną pulę ewaluacyjną detekcji z SoccerNet-Tracking.
 
-Domyślne uruchomienie:
-    python scripts/prepare_detection_evaluation_dataset.py
-
-Założenia domyślne:
-    - przejście po wszystkich katalogach SNMOT-* w zbiorze testowym,
-    - wybór 2 klatek z każdej sekwencji, rozłożonych w czasie,
-    - przy 49 sekwencjach daje to 98 klatek,
-    - do docelowych 100 dobierane są 2 dodatkowe klatki z dwóch różnych
-      sekwencji (o ile jest to możliwe),
-    - wybór jest deterministyczny dla ustalonego SEED,
-    - eksportowane obrazy dostają nazwy eval_001.jpg ... eval_100.jpg,
-    - razem z obrazami eksportowany jest ground truth oraz manifest źródeł.
-
-Wyjście:
-    data/data_detection_evaluation/
-        images/
-            eval_001.jpg
-            ...
-        labels/
-            eval_001.txt
-            ...
-        ground_truth.csv
-        manifest.csv
-        selection_info.json
-
-Format labels/*.txt:
-    YOLO:
-        class_id x_center y_center width height
-    gdzie:
-        0 = ball
-        1 = player (w tym goalkeeper)
-        2 = referee
-
-ground_truth.csv zachowuje dodatkowo oryginalne track_id oraz bbox w pikselach.
+Wybiera deterministycznie klatki z sekwencji testowych, kopiuje obrazy,
+konwertuje adnotacje do YOLO i zapisuje ground truth oraz manifest źródeł.
+Domyślna pula obejmuje 100 klatek z klasami ball, player i referee.
 """
 
 from __future__ import annotations

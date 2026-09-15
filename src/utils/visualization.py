@@ -1,22 +1,11 @@
 """
 Plik: src/utils/visualization.py
- 
+
 Opis:
-    Moduł wizualizacji bird's eye view (BEV) — rzut z góry na boisko.
-    Przyjmuje detekcje zawodników (bbox z YOLO) oraz macierz homografii H
-    i rysuje ich pozycje na standardowej mapie 2D boiska.
- 
-Układ współrzędnych boiska (TVCalib):
-    Środek boiska = (0, 0)
-    Oś X: od -52.5m (lewa linia bramkowa) do +52.5m (prawa linia bramkowa)
-    Oś Y: od -34.0m (górna linia boczna) do +34.0m (dolna linia boczna)
- 
-Użycie:
-    from src.utils.visualization import BirdEyeView
- 
-    bev = BirdEyeView()
-    img = bev.draw(detections_with_pitch_coords, original_frame)
-    cv2.imshow("BEV", img)
+    Rysuje widok z góry boiska na podstawie pozycji w metrach.
+
+Moduł przyjmuje detekcje z naniesionymi współrzędnymi boiska i generuje
+obraz BEV w układzie używanym przez TVCalib.
 """
  
 from typing import Optional

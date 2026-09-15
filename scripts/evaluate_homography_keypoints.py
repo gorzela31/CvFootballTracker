@@ -1,41 +1,13 @@
 #!/usr/bin/env python3
 """
-Ewaluacja homografii estymowanej z 32 keypointow YOLOv8x-pose
-wzgledem referencyjnej H_GT.
+Plik: scripts/evaluate_homography_keypoints.py
 
-Najwazniejsze zalozenia:
-1. Klatka jest fizycznie skalowana (STRETCH) do 640x640 przed YOLOv8x-pose.
-2. Wspolrzedne keypointow sa skalowane z powrotem do oryginalnego obrazu.
-3. Do estymacji H trafiaja keypointy z confidence >= 0.60.
-4. Homografia jest estymowana w kierunku IMAGE [px] -> PITCH [m].
-5. Kazda klatka jest estymowana niezaleznie, bez previous-H fallback.
-6. Jakosc H jest oceniana na dwoch punktach P1/P2 wybranych niezaleznie od
-   badanej metody na podstawie H_GT. Punkty maja reprezentowac przykladowe
-   polozenia zawodnikow na widocznej czesci murawy.
-7. Dla P1/P2 liczone sa:
-   - blad reprojekcji [px] w ORYGINALNEJ rozdzielczosci obrazu,
-   - blad odwzorowania na plaszczyznie boiska [m].
-8. P1/P2 sa wybierane deterministycznie z regularnej siatki boiska:
-   - P1: punkt najblizszy srodkowi widocznego obszaru,
-   - P2: punkt najbardziej oddalony od P1 na obrazie.
-   Wybor zalezy tylko od H_GT, dlatego te same P1/P2 mozna wykorzystac
-   pozniej w ewaluacji TVCalib.
+Opis:
+    Ewaluacja homografii wyznaczanej z 32 keypointów YOLOv8-pose.
 
-Uruchomienie jednej klatki:
-    python scripts/evaluate_homography_keypoints.py --mode single --eval-id 1
-
-Uruchomienie calej puli:
-    python scripts/evaluate_homography_keypoints.py --mode all
-
-Wyniki:
-    results/homography_evaluation/<timestamp>_keypoints_p1p2/
-        metrics_summary.csv
-        per_frame_metrics.csv
-        point_errors.csv
-        keypoint_diagnostics.csv
-        config.json
-        estimated_homographies/
-        visualizations/
+Klatki są rozciągane do 640x640, a predykcje wracają do oryginalnej skali.
+Homografia IMAGE [px] -> PITCH [m] jest liczona niezależnie dla każdej klatki
+z punktów o confidence >= 0.60 i porównywana z H_GT na stałych punktach P1/P2.
 """
 
 from __future__ import annotations

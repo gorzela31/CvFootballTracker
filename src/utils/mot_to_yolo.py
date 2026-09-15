@@ -1,20 +1,12 @@
 """
-Plik: mot_to_yolo.py
-Opis: Skrypt konwertujacy zbior danych z formatu MOT (SoccerNet) do formatu YOLO.
-Obsluguje podzialy: train, valid, test. Generuje strukture katalogow:
-yoloformat/[split]/[clip_name]/images oraz labels.
-Automatycznie mapuje klasy na podstawie plikow gameinfo.ini.
+Plik: src/utils/mot_to_yolo.py
 
-Klasy wyjsciowe (3):
-  0: ball
-  1: player    (player + goalkeeper, obie druzyny)
-  2: referee   (main + side referee)
-Tracklety nie pasujace do zadnej kategorii (np. "other") sa pomijane.
+Opis:
+    Konwertuje adnotacje SoccerNet w formacie MOT do formatu YOLO.
 
-Subsampling klatek:
-  Kazdy klip ma 750 klatek (25 fps, 30 sekund). Sasiednie klatki sa mocno
-  skorelowane, wiec dla traina bierzemy co N-ta klatke. Walidacja i test
-  pozostaja w pelnej rozdzielczosci dla rzetelnej oceny.
+Mapuje klasy na ball, player i referee na podstawie `gameinfo.ini`, pomija
+nieobsługiwane tracklety i stosuje gęstsze próbkowanie dla walidacji i testu
+niż dla treningu.
 """
 
 import os

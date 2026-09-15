@@ -1,40 +1,13 @@
 #!/usr/bin/env python3
 """
-Ewaluacja homografii TVCalib wzgledem referencyjnej H_GT.
+Plik: scripts/evaluate_homography_tvcalib.py
 
-Najwazniejsze zalozenia:
-1. TVCalib otrzymuje ORYGINALNA klatke - bez zewnetrznego STRETCH do 640x640.
-   Preprocessing wymagany przez model segmentacji jest realizowany wewnetrznie przez
-   TVCalibHomography.
-2. Homografia jest estymowana w kierunku IMAGE [px] -> PITCH [m].
-3. Kazda klatka jest estymowana niezaleznie, bez previous-H fallback.
-4. Jakosc H jest oceniana na tych samych dwoch punktach P1/P2 co w ewaluacji
-   metody keypointowej. Punkty sa wybierane niezaleznie od badanej metody na
-   podstawie H_GT i maja reprezentowac przykladowe polozenia zawodnikow.
-5. Dla P1/P2 liczone sa:
-   - blad reprojekcji [px] w ORYGINALNEJ rozdzielczosci obrazu,
-   - blad odwzorowania na plaszczyznie boiska [m].
-6. P1/P2 sa wybierane deterministycznie z regularnej siatki boiska:
-   - P1: punkt najblizszy srodkowi widocznego obszaru,
-   - P2: punkt najbardziej oddalony od P1 na obrazie.
-7. Czas estymacji obejmuje get_homography(), czyli segmentacje i kalibracje.
-   Inicjalizacja modelu i warm-up sa poza pomiarem. W podsumowaniu czas jest
-   liczony dla wszystkich prob z dostepnym pomiarem, rowniez nieudanych.
+Opis:
+    Ewaluacja homografii TVCalib względem referencyjnej H_GT.
 
-Uruchomienie jednej klatki:
-    python scripts/evaluate_homography_tvcalib.py --mode single --eval-id 1
-
-Uruchomienie calej puli:
-    python scripts/evaluate_homography_tvcalib.py --mode all
-
-Wyniki:
-    results/homography_evaluation/<timestamp>_tvcalib_p1p2/
-        metrics_summary.csv
-        per_frame_metrics.csv
-        point_errors.csv
-        config.json
-        estimated_homographies/
-        visualizations/
+TVCalib pracuje na oryginalnych klatkach i niezależnie wyznacza homografię
+IMAGE [px] -> PITCH [m]. Wyniki są porównywane z H_GT na tych samych,
+deterministycznie wybranych punktach P1/P2 co w ewaluacji keypointów.
 """
 
 from __future__ import annotations

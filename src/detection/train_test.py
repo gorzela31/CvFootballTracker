@@ -1,9 +1,11 @@
 """
-Plik: train_test.py
-Opis: Skrypt walidacyjny sluzacy do weryfikacji poprawnosci potoku 
-przetwarzania danych. Uruchamia skrocony proces uczenia modelu na 
-lokalnych zasobach obliczeniowych (CPU) w celu potwierdzenia 
-integralnosci plikow konfiguracyjnych YAML oraz etykiet YOLO.
+Plik: src/detection/train_test.py
+
+Opis:
+    Sprawdza konfigurację zbioru YOLO przez minimalny trening testowy.
+
+Generuje tymczasowy `data.yaml` i uruchamia krótki trening CPU, aby wykryć
+problemy z etykietami lub strukturą danych przed właściwym treningiem.
 """
 
 import os

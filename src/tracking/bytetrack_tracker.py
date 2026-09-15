@@ -2,26 +2,10 @@
 Plik: src/tracking/bytetrack_tracker.py
 
 Opis:
-    Wrapper nad implementacja ByteTrack (Zhang et al., ECCV 2022)
-    dostarczana przez biblioteke supervision (Roboflow).
+    Wrapper `supervision.ByteTrack` używany w pipeline'ach śledzenia.
 
-    ByteTrack - dwustopniowy MOT (Multi-Object Tracking):
-        1. Detekcje wysokiej pewnosci matchowane sa do istniejacych
-           trackow przez IoU + filter Kalmana.
-        2. Detekcje niskiej pewnosci uzywane do "ratowania" trackow
-           ktore w danej klatce zostaly tymczasowo zgubione (okluzja).
-
-    Tracker oczekuje detekcji w formacie sv.Detections z ustawionym
-    polem class_id (klasy traktowane sa oddzielnie - track ID jest
-    spojny w obrebie klasy, ale ball ma swoja pule ID, player swoja).
-
-Uzycie:
-    tracker = ByteTrackTracker(frame_rate=25)
-    for frame in frames:
-        detections = detector.detect(frame)          # sv.Detections
-        tracked   = tracker.update(detections)        # + tracker_id
-        if frame_changed_scene:
-            tracker.reset()
+Przyjmuje `sv.Detections` z `class_id`, nadaje obiektom stabilne track ID
+i pozwala zresetować stan po zmianie ujęcia. Klasy są śledzone niezależnie.
 """
 
 import supervision as sv

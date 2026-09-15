@@ -2,12 +2,10 @@
 Plik: src/visualization/minimap.py
 
 Opis:
-    Renderowanie minimapy boiska z naniesionymi pozycjami obiektow
-    (ball, player, referee). Opakowuje PitchRenderer w wygodny interfejs
-    przyjmujacy detekcje z TVCalibHomography.project_detections_to_pitch().
+    Renderuje minimapę boiska z pozycjami piłki, zawodników i sędziego.
 
-    Klasa wspiera padding pionowy do zadanej wysokosci, co ulatwia
-    komponowanie minimapy obok klatki wideo o roznych wymiarach (np.hstack).
+Opakowuje `PitchRenderer`, dodaje padding do zadanej wysokości oraz elementy
+informacyjne potrzebne przy łączeniu minimapy z klatką wideo.
 """
 
 import cv2

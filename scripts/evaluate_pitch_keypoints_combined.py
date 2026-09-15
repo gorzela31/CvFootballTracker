@@ -1,26 +1,13 @@
 #!/usr/bin/env python3
 """
-Ewaluacja 32 punktów charakterystycznych boiska na połączonym zbiorze:
-    data/keypoints_evaluation_combined/test
+Plik: scripts/evaluate_pitch_keypoints_combined.py
 
-Główne metryki:
-- recall widocznych punktów GT przy confidence >= 0.60,
-- średni błąd lokalizacji [px],
-- mediana błędu lokalizacji [px],
-- średni błąd lokalizacji [m] dla części SoccerNet-Calibration,
-- mediana błędu lokalizacji [m] dla części SoccerNet-Calibration.
+Opis:
+    Ocenia detekcję 32 keypointów boiska na połączonym zbiorze testowym.
 
-Błędy [px] są liczone w przestrzeni wejściowej modelu po fizycznym
-STRETCH do 640x640. Zapewnia to wspólną skalę dla obu źródeł danych.
-
-Błędy [m] są liczone wyłącznie dla obrazów SoccerNet, dla których
-manifest wskazuje niezależną referencyjną H_GT. Predykcja keypointu jest
-skalowana z 640x640 z powrotem do oryginalnej rozdzielczości obrazu,
-a następnie rzutowana przez H_GT IMAGE -> PITCH i porównywana ze znaną
-pozycją danego punktu w PITCH_KEYPOINTS_TEMPLATE_M.
-
-Uruchomienie:
-    python scripts/evaluate_pitch_keypoints_combined.py
+Liczy recall i błędy lokalizacji w pikselach, a dla klatek SoccerNet także
+w metrach po użyciu referencyjnej H_GT. Model otrzymuje obrazy rozciągnięte
+do 640x640, a wyniki są zapisywane razem z konfiguracją i wizualizacjami.
 """
 
 from __future__ import annotations

@@ -2,25 +2,10 @@
 Plik: src/detection/faster_rcnn.py
 
 Opis:
-    Wrapper nad modelem Faster R-CNN (torchvision) do detekcji
-    zawodnikow, pilki i sedziow na obrazach transmisji pilkarskiej.
+    Wrapper Faster R-CNN do detekcji piłki, zawodników i sędziów.
 
-    Obslugiuje dwa tryby pracy:
-        1. Fine-tuned na SoccerNet (3 klasy: ball, player, referee)
-        2. COCO pretrained z mapowaniem klas (person->player, sports ball->ball)
-
-    Zwraca detekcje w formacie sv.Detections (kompatybilne z ByteTrack).
-
-Uzycie:
-    from src.detection.faster_rcnn import FasterRCNNDetector
-
-    # Fine-tuned
-    detector = FasterRCNNDetector(weights_path="models/faster_rcnn/trained.pt")
-
-    # COCO pretrained (fallback)
-    detector = FasterRCNNDetector(weights_path=None)
-
-    detections = detector.predict(frame_bgr, conf=0.3)
+Obsługuje model dostrojony na SoccerNet oraz wagi COCO z mapowaniem klas.
+Zwraca detekcje `sv.Detections`, gotowe do użycia z ByteTrack.
 """
 
 import cv2

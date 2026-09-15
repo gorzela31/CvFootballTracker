@@ -1,20 +1,12 @@
 """
-pitch_homography_diagnostics.py
+Plik: src/calibration/classicalApproachPlayground/pitch_homography_diagnostics.py
 
-Diagnostyka klasycznej homografii boiska pilkarskiego.
+Opis:
+    Diagnozuje kolejne etapy klasycznej estymacji homografii boiska.
 
-Ten modul nie zaklada, ze homografia musi zostac znaleziona dla kazdej klatki.
-Jego celem jest pokazanie krok po kroku, czy algorytm naprawde widzi cechy boiska:
-field mask, maske bialych linii, komponenty, odcinki, rodziny kierunkow,
-przeciecia, kolo srodkowe oraz probe estymacji H.
-
-Zasada pracy:
-1. Najpierw diagnozujemy ekstrakcje cech.
-2. Dopiero potem probujemy homografii.
-3. Wynik H jest oznaczany jako accepted tylko po dodatkowej walidacji geometrycznej.
-
-Wymagany plik obok notebooka:
-    classical_homography_v2.py
+Pokazuje maskę murawy, linie, odcinki, grupy kierunków, przecięcia i próbę
+wyznaczenia H, a wynik oznacza jako zaakceptowany dopiero po walidacji geometrii.
+Narzędzie ma charakter eksperymentalny i wspiera `classical_homography_v2.py`.
 """
 
 from __future__ import annotations

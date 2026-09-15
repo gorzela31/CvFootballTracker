@@ -1,57 +1,12 @@
 """
-Ewaluacja YOLOv8n i Faster R-CNN na ZAMROZONEJ puli badawczej detekcji.
+Plik: scripts/evaluate_detection.py
 
-Umiesc plik jako:
-    CvFootballTracker/scripts/evaluate_detection.py
+Opis:
+    Ocenia YOLOv8n i Faster R-CNN na zamrożonej puli detekcji.
 
-Zrodlo danych:
-    data/data_detection_evaluation/
-        images/eval_001.jpg ... eval_100.jpg
-        manifest.csv
-        ground_truth.csv
-
-Tryby:
-    1) Jedna klatka:
-       python scripts/evaluate_detection.py
-
-       Domyslnie:
-       eval_001.jpg
-
-       Inna klatka:
-       python scripts/evaluate_detection.py --mode single --eval-id 37
-
-    2) Cala pula badawcza:
-       python scripts/evaluate_detection.py --mode all
-
-    3) Tylko jeden model:
-       python scripts/evaluate_detection.py --mode all --models yolo
-       python scripts/evaluate_detection.py --mode all --models faster_rcnn
-
-Metryki:
-    - Precision / Recall przy OPERATING_CONF i IoU=0.5
-    - AP@0.5
-    - AP@0.5:0.95, COCO-style, 101-point interpolation
-    - mean / median IoU dla true positives
-    - TP / FP / FN
-    - sredni czas inferencji [ms]
-    - FPS
-
-Wyniki:
-    results/detection_evaluation/<timestamp>/
-        metrics_summary.csv
-        per_frame_metrics.csv
-        predictions.csv
-        sample_manifest.csv
-        config.json
-        annotations/<model>/pred/*.jpg
-        annotations/<model>/compare_gt/*.jpg
-
-Klasy:
-    0 = ball
-    1 = player (w tym goalkeeper)
-    2 = referee
-
-Najwazniejszym wierszem do pracy jest class='player'.
+Liczy Precision, Recall, F1, AP, IoU oraz czas inferencji dla klas ball,
+player i referee. Obsługuje ewaluację pojedynczej klatki lub całej puli,
+a wyniki zapisuje w `results/detection_evaluation/<timestamp>/`.
 """
 
 from __future__ import annotations

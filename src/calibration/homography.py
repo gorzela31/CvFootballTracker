@@ -2,31 +2,10 @@
 Plik: src/calibration/homography.py
 
 Opis:
-    Wrapper nad modelem TVCalib (Theiner et al., WACV 2023).
-    Odpowiada za estymację macierzy homografii H (3x3) która
-    mapuje współrzędne pikselowe obrazu na rzeczywiste współrzędne
-    płaszczyzny boiska (w metrach).
+    Wrapper TVCalib do estymacji homografii obrazu na płaszczyznę boiska.
 
-Pipeline wewnętrzny (dwa etapy TVCalib):
-    1. Segmentacja semantyczna boiska
-       - Sieć neuronowa (HRNet) wykrywa linie i łuki boiska na obrazie
-       - Wynikiem są maski klas dla każdego elementu boiska
-    2. Optymalizacja homografii
-       - Z masek wyodrębniane są szkielety i ekstrema linii (keypoints)
-       - Algorytm iteracyjnie minimalizuje błąd reprojekcji modelu
-         3D boiska na obraz (różniczkowalny renderer)
-       - Wynikiem jest macierz H oraz parametry kamery
-
-Użycie:
-    from src.calibration.homography import TVCalibHomography
-
-    calibrator = TVCalibHomography(
-        model_weights="src/calibration/tvcalib/data/segment_localization/train_59.pt"
-    )
-    H = calibrator.get_homography("ścieżka/do/obrazu.jpg")
-
-    # Rzutowanie punktu (stopy zawodnika) na boisko
-    pitch_coords = calibrator.project_point_to_pitch((x_px, y_px), H)
+Model segmentuje linie i łuki boiska, a następnie optymalizuje macierz
+IMAGE [px] -> PITCH [m]. Moduł udostępnia też rzutowanie punktów i detekcji.
 """
 
 import sys

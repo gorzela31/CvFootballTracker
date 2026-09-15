@@ -2,21 +2,11 @@
 Plik: pipelines/pipeline_yolo_bytetrack_tvcalib.py
 
 Opis:
-    Pipeline detekcja -> tracking -> kalibracja -> projekcja na boisko.
+    Pipeline YOLOv8n -> ByteTrack -> TVCalib.
 
-    Komponenty:
-        Detekcja:    YOLOv8n (wagi wytrenowane na SoccerNet, 3 klasy)
-        Tracking:    ByteTrack (supervision)
-        Kalibracja:  TVCalib z dynamiczna rekalibracja co CALIB_STRIDE klatek
-        Projekcja:   pozycje stop (srodek dolnej krawedzi bbox) -> metry na boisku
-        Wizualizacja: minimapa boiska w ciemnym motywie obok klatki glownej
-
-    Wejscie:
-        Katalog z klatkami SoccerNet: SNMOT-XXX/img1/*.jpg
-
-    Wyjscie (w results/<RUN_NAME>/):
-        - output.mp4   : wideo z bboxami, klasami, ID trackow oraz minimapa
-        - tracks.csv   : pozycje per (frame, track_id) w pikselach i metrach
+Przetwarza klatki SoccerNet, wyznacza pozycje obiektow na boisku
+i zapisuje wideo z minimapa oraz CSV z torami. TVCalib odswieza homografie
+co ustalona liczbe klatek.
 """
 
 import sys

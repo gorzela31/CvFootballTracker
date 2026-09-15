@@ -2,43 +2,10 @@
 Plik: src/calibration/keypoints_homography.py
 
 Opis:
-    Wrapper nad modelem YOLOv8x-pose do detekcji 32 keypointów boiska
-    piłkarskiego i obliczenia macierzy homografii H (3x3).
+    Wyznacza homografię boiska z 32 keypointów YOLOv8-pose.
 
-Pipeline wewnętrzny:
-    1. Detekcja keypointów boiska
-       - obraz jest domyślnie fizycznie skalowany metodą STRETCH do 640x640,
-         zgodnie z preprocessingiem zbioru użytego do treningu modelu,
-       - YOLOv8-pose wykrywa 32 charakterystyczne punkty boiska,
-       - współrzędne wykrytych punktów są skalowane z powrotem do
-         oryginalnej rozdzielczości klatki,
-       - wynikiem są pary (x_px, y_px, confidence).
-
-    2. Obliczenie homografii
-       - keypointy z confidence >= KEYPOINT_CONFIDENCE_THRESHOLD są
-         dopasowywane do ich znanych pozycji metrycznych na boisku,
-       - cv2.findHomography z RANSAC wyznacza H w kierunku:
-             IMAGE [px] -> PITCH [m]
-
-Układ współrzędnych:
-    X ∈ [-52.5, +52.5] m
-    Y ∈ [-34.0, +34.0] m
-    środek boiska = (0, 0)
-
-Użycie:
-    from src.calibration.keypoints_homography import KeypointsHomography
-
-    calibrator = KeypointsHomography(
-        model_weights="models/pitch_keypoints/trained_keypoints.pt"
-    )
-
-    H = calibrator.get_homography("sciezka/do/obrazu.jpg")
-
-Opcjonalnie można odtworzyć stare zachowanie bez wymuszonego stretchu:
-    calibrator = KeypointsHomography(
-        model_weights="models/pitch_keypoints/trained_keypoints.pt",
-        use_stretch=False,
-    )
+Domyślnie rozciąga obraz do 640x640, skaluje predykcje z powrotem i dopasowuje
+IMAGE [px] -> PITCH [m] przez `cv2.findHomography` z RANSAC.
 """
 
 from pathlib import Path

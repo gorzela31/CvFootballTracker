@@ -1,3 +1,10 @@
+"""
+Plik: src/utils/visualize_gt.py
+
+Opis:
+    Rysuje adnotacje ground truth z pliku MOT na wybranej klatce obrazu.
+"""
+
 import cv2
 import os
 

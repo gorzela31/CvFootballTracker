@@ -1,10 +1,10 @@
 """
-Plik: inference.py
-Opis: Skrypt realizuje proces inferencji przy uzyciu wytrenowanego modelu YOLO 
-na sekwencji obrazow (klatek wideo). Program wczytuje klatki z okreslonego 
-katalogu, wykonuje detekcje obiektow dla kazdej klatki, nanosi wizualizacje 
-wynikow (bounding boxy, etykiety klas) i zapisuje koncowy wynik w formie 
-pliku wideo MP4.
+Plik: src/detection/inference.py
+
+Opis:
+    Uruchamia inferencję YOLO na sekwencji klatek i zapisuje wideo MP4.
+
+Skrypt wykonuje detekcję, rysuje bboxy i etykiety klas; nie trenuje modelu.
 """
 
 import cv2

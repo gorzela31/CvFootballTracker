@@ -1,35 +1,12 @@
 """
-Confidence sweep dla wyników ewaluacji detekcji BEZ ponownej inferencji.
+Plik: scripts/detection_confidence_sweep.py
 
-Umieść plik jako:
-    CvFootballTracker/scripts/confidence_sweep.py
+Opis:
+    Analizuje wpływ progu confidence na wyniki detekcji.
 
-Domyślne uruchomienie:
-    python scripts/confidence_sweep.py
-
-Skrypt:
-    - automatycznie znajduje najnowszy katalog:
-          results/detection_evaluation/<timestamp>/
-      zawierający predictions.csv,
-    - korzysta z zamrożonego GT:
-          data/data_detection_evaluation/ground_truth.csv,
-    - liczy Precision, Recall i F1 dla progów confidence 0.05...0.90,
-    - robi to osobno dla:
-          ball, player, referee
-      oraz osobno dla:
-          yolo, faster_rcnn,
-    - zapisuje CSV i wykresy,
-    - NIE uruchamia ponownie modeli.
-
-UWAGA METODOLOGICZNA:
-    best_thresholds.csv traktuj jako analizę wrażliwości na próg,
-    a nie jako podstawę do dostrojenia modelu na zbiorze testowym.
-
-Dodatkowe przykłady:
-    python scripts/confidence_sweep.py --start 0.05 --end 0.95 --step 0.05
-
-    python scripts/confidence_sweep.py ^
-        --results-dir results/detection_evaluation/2026-09-06_12-34-56
+Skrypt korzysta z zapisanych predykcji i zamrożonego ground truth, więc nie
+uruchamia ponownie modeli. Dla YOLO i Faster R-CNN liczy Precision, Recall
+i F1 dla klas ball, player i referee, a wyniki zapisuje jako CSV i wykresy.
 """
 
 from __future__ import annotations

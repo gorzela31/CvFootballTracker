@@ -2,23 +2,10 @@
 Plik: src/detection/train_faster_rcnn.py
 
 Opis:
-    Skrypt treningowy Faster R-CNN ResNet50-FPN v2 na danych SoccerNet
-    w formacie YOLO (wygenerowanym przez src/utils/mot_to_yolo.py).
+    Trenuje Faster R-CNN ResNet50-FPN v2 na danych SoccerNet.
 
-    Przygotowany do uruchomienia zarowno lokalnie (szybki test CPU)
-    jak i na Google Colab (pelny trening GPU).
-
-    Klasy:
-        0: ball         (w Faster R-CNN label=1, bo 0=background)
-        1: player       (label=2)
-        2: referee      (label=3)
-
-Uzycie:
-    # Pelny trening (GPU/Colab)
-    python src/detection/train_faster_rcnn.py
-
-    # Szybki test (CPU)
-    python src/detection/train_faster_rcnn.py --test
+Wczytuje etykiety YOLO, mapuje je na format torchvision i obsługuje pełny
+trening GPU oraz krótki tryb testowy CPU uruchamiany przez `--test`.
 """
 
 import argparse

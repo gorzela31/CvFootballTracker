@@ -1,45 +1,13 @@
 #!/usr/bin/env python3
 """
-Buduje:
-    data/football-field-detection-16_extended
+Plik: scripts/build_football_field_detection_16_extended.py
 
-na bazie:
-    data/football-field-detection-16
-oraz pierwszych 500 poprawnie przygotowanych klatek z:
-    data/calibration_dataset/calibration/train
+Opis:
+    Rozszerza football-field-detection-16 o automatyczne etykiety keypointów.
 
-Założenia:
-- kopiujemy istniejące train/ i valid/ bez modyfikacji,
-- zachowujemy proporcję train:valid istniejącego zbioru,
-- dla SoccerNet-Calibration wyznaczamy H_GT z ręcznych adnotacji linii,
-- 32 punkty PITCH_KEYPOINTS_TEMPLATE_M rzutujemy H_GT na klatkę,
-- punkty wypadające poza obrazem zapisujemy jako visibility=0,
-- punkty znajdujące się w obrazie zapisujemy jako visibility=2,
-- nowe obrazy są FIZYCZNIE stretchowane do 640x640, zgodnie z
-  preprocessingiem oryginalnego football-field-detection v16,
-- współrzędne YOLO są znormalizowane, więc po stretchu pozostają poprawne,
-- tworzymy nowe data.yaml wskazujące na train/images i valid/images,
-- zapisujemy manifest oraz preview nowych automatycznych etykiet.
-
-Skrypt NIE korzysta z 100 klatek ewaluacyjnych z
-data/data_homography_evaluation. Dzięki temu pozostają one czystym test setem.
-
-Umieść jako:
-    scripts/build_football_field_detection_16_extended.py
-
-Uruchom:
-    python scripts/build_football_field_detection_16_extended.py
-
-Ponowne zbudowanie:
-    python scripts/build_football_field_detection_16_extended.py --overwrite
-
-Np. 30 preview:
-    python scripts/build_football_field_detection_16_extended.py --preview 30 --overwrite
-
-Domyślnie skrypt zbiera pierwsze 500 POPRAWNIE przetworzonych przykładów.
-Jeżeli któraś z pierwszych klatek nie pozwala wyznaczyć H_GT lub nie ma
-żadnego z 32 punktów w obrazie, jest pomijana i skrypt idzie dalej,
-aż uzyska 500 przykładów albo wyczerpie dane.
+Kopiuje istniejące splity, a następnie dodaje do nich do 500 poprawnie
+przetworzonych klatek SoccerNet-Calibration. Dla każdej klatki wyznacza H_GT,
+rzuca 32 punkty boiska na obraz, zapisuje etykiety YOLO Pose i manifest.
 """
 
 from __future__ import annotations

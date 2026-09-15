@@ -1,56 +1,14 @@
 #!/usr/bin/env python3
 """
-Budowa połączonego zbioru testowego keypointów boiska.
+Plik: scripts/build_combined_keypoints_evaluation_dataset.py
 
-Źródła:
-1) 100 klatek z:
-       data/data_homography_evaluation/
-   Dla każdej klatki 32 referencyjne punkty boiska są rzutowane przez
-   H_GT (pitch -> image). Do labela YOLO Pose trafiają jako widoczne
-   tylko te punkty, których projekcja leży WEWNĄTRZ oryginalnego obrazu.
+Opis:
+    Buduje połączony zbiór ewaluacyjny 32 keypointów boiska.
 
-2) Oryginalny split test z:
-       data/football-field-detection-16/test/
-   Obrazy i ręczne etykiety YOLO Pose są kopiowane bez zmian.
-
-Wynik:
-    data/keypoints_evaluation_combined/
-        test/
-            images/
-            labels/
-        visualizations/
-            pitch_template_32_keypoints.png
-            sn_*.png
-            ffd_*.png
-        manifest.csv
-        data.yaml
-        summary.json
-
-WAŻNE:
-- Nie zmieniamy rozdzielczości obrazów SoccerNet.
-- GT keypointów SoccerNet jest wyznaczane w ORYGINALNYM układzie obrazu.
-- Późniejszy evaluator może robić:
-      original -> stretch 640x640 -> model -> back to original size
-  i dopiero wtedy porównywać predykcję z tym GT.
-- Punkty poza kadrem dostają w YOLO Pose:
-      x=0, y=0, visibility=0
-- Punkty wewnątrz kadru:
-      visibility=2
-
-Umieść jako:
-    scripts/build_combined_keypoints_evaluation_dataset.py
-
-Uruchomienie:
-    python scripts/build_combined_keypoints_evaluation_dataset.py
-
-Bez wizualizacji:
-    python scripts/build_combined_keypoints_evaluation_dataset.py --no-visualizations
-
-Tylko np. pierwsze 10 wizualizacji:
-    python scripts/build_combined_keypoints_evaluation_dataset.py --max-visualizations 10
-
-Nadpisanie wcześniej utworzonego zbioru:
-    python scripts/build_combined_keypoints_evaluation_dataset.py --overwrite
+Łączy 100 klatek SoccerNet-Calibration z testową częścią
+football-field-detection-16. Dla SoccerNet wyznacza etykiety z H_GT,
+zachowując współrzędne w oryginalnym układzie obrazu, a następnie zapisuje
+zbiór YOLO Pose, manifest, konfigurację i opcjonalne wizualizacje.
 """
 
 from __future__ import annotations

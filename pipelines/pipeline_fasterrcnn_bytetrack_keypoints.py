@@ -2,32 +2,11 @@
 Plik: pipelines/pipeline_fasterrcnn_bytetrack_keypoints.py
 
 Opis:
-    Pipeline detekcja -> tracking -> kalibracja -> projekcja na boisko.
+    Pipeline Faster R-CNN -> ByteTrack -> homografia z keypointow boiska.
 
-    Komponenty:
-        Detekcja:    Faster R-CNN ResNet50-FPN v2 (fine-tuned na SoccerNet, 3 klasy)
-        Tracking:    ByteTrack (supervision)
-        Kalibracja:  YOLOv8x-pose (roboflow/sports) + RANSAC homografia,
-                     z dynamiczną rekalibracją co CALIB_STRIDE klatek
-        Projekcja:   pozycje stop (środek dolnej krawędzi bbox) -> metry na boisku
-        Wizualizacja: minimapa boiska w ciemnym motywie obok klatki głównej
-
-    Wejście:
-        Katalog z klatkami SoccerNet: SNMOT-XXX/img1/*.jpg
-
-    Wyjście (w results/<RUN_NAME>/):
-        - output.mp4   : wideo z bboxami, klasami, ID tracków oraz minimapa
-        - tracks.csv   : pozycje per (frame, track_id) w pikselach i metrach
-
-Użycie:
-    # Domyślne ścieżki
-    python pipelines/pipeline_fasterrcnn_bytetrack_keypoints.py
-
-    # Własne ścieżki
-    python pipelines/pipeline_fasterrcnn_bytetrack_keypoints.py \
-        --frames data/tracking_dataset/tracking/test/SNMOT-116/img1 \
-        --frcnn-weights models/faster_rcnn/trained_fasterrcnn_resnet50.pt \
-        --conf 0.15 --calib-stride 10
+Przetwarza sekwencje klatek SoccerNet, rzutuje pozycje obiektow na boisko
+i zapisuje wideo z minimapa oraz plik CSV z torami w pikselach i metrach.
+Homografia jest wyznaczana przez YOLOv8-pose i okresowo odswiezana.
 """
 
 import argparse

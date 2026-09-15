@@ -1,41 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate a reference (annotation-derived) soccer-pitch homography from
-SoccerNet-style semantic line annotations.
+Plik: scripts/generate_homography_gt.py
 
-Input:
-  - broadcast image (JPG/PNG)
-  - JSON with semantic pitch-line annotations in normalized coordinates
+Opis:
+    Wyznacza referencyjną homografię boiska z adnotacji linii SoccerNet.
 
-Output:
-  - JSON with H_pitch_to_image and H_image_to_pitch
-  - PNG visualization with the pitch projection and mapped demo points
-
-Coordinate system on the pitch (same convention as the SoccerNet calibration
-baseline used in the supplied project):
-  X = 0 at the center line, negative toward the left goal, positive toward right
-  Y = 0 on the pitch center axis, negative toward the top touchline,
-      positive toward the bottom touchline
-  units = meters
-
-Example:
-    python generate_homography_gt.py \
-        --image 00000.jpg \
-        --annotation 00000.json \
-        --output-dir gt_demo
-
-To map your own image points later, e.g. bottom-centers of player boxes:
-    python generate_homography_gt.py \
-        --image 00000.jpg \
-        --annotation 00000.json \
-        --output-dir gt_demo \
-        --points 145,260 665,305
-
-Dependencies:
-    pip install numpy opencv-python matplotlib scipy
-
-SciPy is optional. If available, the initial line-DLT homography is refined by
-robust nonlinear least squares to minimize point-to-projected-line error.
+Na podstawie obrazu i pliku JSON dopasowuje model linii boiska, zapisuje
+macierze PITCH -> IMAGE oraz IMAGE -> PITCH w JSON i tworzy wizualizację.
+Opcjonalnie może dopracować wynik przez optymalizację SciPy.
 """
 
 from __future__ import annotations

@@ -1,52 +1,13 @@
 #!/usr/bin/env python3
 """
-Batchowe wyznaczanie referencyjnych macierzy homografii H_GT
-dla zamrożonej puli ewaluacyjnej SoccerNet-Calibration.
+Plik: scripts/generate_homography_evaluation_gt.py
 
-Umieść plik jako:
-    CvFootballTracker/scripts/generate_homography_evaluation_gt.py
+Opis:
+    Batchowo wyznacza referencyjne homografie H_GT dla puli ewaluacyjnej.
 
-WYMAGANE:
-    W tym samym katalogu scripts/ powinien znajdować się wcześniej przygotowany:
-        generate_homography_gt.py
-
-Wejście:
-    data/data_homography_evaluation/
-        images/
-        annotations/
-        manifest.csv
-
-Wyjście:
-    data/data_homography_evaluation/
-        ground_truth/
-            eval_homo_001_gt.json
-            ...
-        visualizations_gt/
-            eval_homo_001_gt.png
-            ...
-        homography_ground_truth.csv
-        homography_gt_summary.json
-        homography_gt_failures.csv   # tylko jeśli wystąpią błędy
-
-Każdy *_gt.json zawiera:
-    - H_pitch_to_image
-    - H_image_to_pitch
-    - wykorzystane klasy linii
-    - diagnostykę dopasowania linii
-    - deterministyczne punkty demonstracyjne image -> pitch
-
-Wizualizacja jest zgodna z wcześniejszym generate_homography_gt.py:
-    lewa strona  = obraz transmisji + adnotacje + projekcja modelu boiska,
-    prawa strona = rzut boiska z odpowiadającymi punktami w metrach.
-
-Przykłady:
-    python scripts/generate_homography_evaluation_gt.py
-
-    python scripts/generate_homography_evaluation_gt.py --no-refine
-
-    python scripts/generate_homography_evaluation_gt.py --limit 1
-
-    python scripts/generate_homography_evaluation_gt.py --overwrite
+Wczytuje obrazy, adnotacje linii i manifest z SoccerNet-Calibration,
+a następnie zapisuje dla każdej klatki macierze homografii, diagnostykę,
+wizualizację oraz zbiorcze podsumowanie wyników.
 """
 
 from __future__ import annotations

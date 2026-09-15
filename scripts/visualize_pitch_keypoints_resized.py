@@ -1,57 +1,13 @@
 #!/usr/bin/env python3
 """
-Wizualizacja detekcji 32 keypointów boiska na połączonym zbiorze
-ewaluacyjnym 128 klatek:
+Plik: scripts/visualize_pitch_keypoints_resized.py
 
-    - 100 klatek SoccerNet-Calibration
-    - 28 klatek football-field-detection
+Opis:
+    Wizualizuje predykcje 32 keypointów boiska na połączonym zbiorze.
 
-Domyślnie wykonywany jest jawny STRETCH obrazu do 640x640 przed
-inferencją modelu YOLOv8x-pose.
-
-Schemat:
-    original W x H
-        -> cv2.resize(..., 640x640)
-        -> YOLOv8x-pose
-        -> 32 keypointy w układzie 640x640
-        -> mapowanie współrzędnych z powrotem do W x H
-        -> wizualizacja na oryginalnym obrazie
-
-Plik:
-    scripts/visualize_pitch_keypoints_resized.py
-
-Wagi:
-    models/pitch_keypoints/trained_keypoints.pt
-
-Dataset:
-    data/keypoints_evaluation_combined/
-        manifest.csv
-        test/
-            images/
-            labels/
-
-Przykłady:
-
-Jedna klatka:
-    python scripts/visualize_pitch_keypoints_resized.py --eval-id 1
-
-Wszystkie 128 klatek:
-    python scripts/visualize_pitch_keypoints_resized.py --mode all
-
-Wszystkie klatki, próg 0.6:
-    python scripts/visualize_pitch_keypoints_resized.py --mode all --conf-threshold 0.6
-
-Bez pokazywania słabych predykcji:
-    python scripts/visualize_pitch_keypoints_resized.py --mode all --conf-threshold 0.6 --hide-low-confidence
-
-Wyłączenie stretchu tylko diagnostycznie:
-    python scripts/visualize_pitch_keypoints_resized.py --mode all --disable-stretch
-
-Wyniki:
-    results/keypoints_detection_combined/<timestamp>/
-        keypoints.csv
-        config.json
-        visualizations/
+Obraz jest domyślnie rozciągany do 640x640 przed inferencją YOLOv8-pose,
+a współrzędne predykcji wracają do oryginalnego rozmiaru przed narysowaniem.
+Skrypt obsługuje pojedynczą klatkę i całą pulę oraz zapisuje CSV i obrazy.
 """
 
 from __future__ import annotations
