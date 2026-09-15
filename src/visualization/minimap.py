@@ -69,7 +69,7 @@ class MinimapRenderer:
                             gdy komponujemy obok klatki wideo
         """
         canvas = self.pitch.render_empty()
-        pitch_canvas_h = canvas.shape[0]   # wysokosc samego boiska, bez paddingu
+        pitch_canvas_h = canvas.shape[0]   # wysokość boiska bez paddingu
 
         for d in detections:
             pitch_coords = d.get("pitch_coords")
@@ -83,7 +83,7 @@ class MinimapRenderer:
         if self.show_frame_info and frame_idx is not None:
             self._draw_frame_info(canvas, frame_idx, total_frames)
 
-        # Padding ZANIM rysujemy legende - zeby legenda miala miejsce ponizej boiska
+        # Padding musi powstać przed narysowaniem legendy.
         if target_height is not None and target_height > canvas.shape[0]:
             pad_h = target_height - canvas.shape[0]
             padding = np.full(

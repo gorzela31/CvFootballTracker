@@ -41,8 +41,8 @@ TVCALIB_WEIGHTS = PROJECT_ROOT / "src" / "calibration" / "tvcalib" / "data" / "s
 
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 25 # co ile klatek rekalibrowac homografie TVCalib (im mniejszy, tym bardziej odporny na dryft ale wolniejszy pipeline)
-OPTIM_STEPS = 500 # liczba krokow optymalizacji TVCalib (im wiecej, tym dokladniejsza ale wolniejsza kalibracja)
+CALIB_STRIDE = 25  # co ile klatek liczona jest homografia TVCalib
+OPTIM_STEPS = 500   # liczba kroków optymalizacji TVCalib
 
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
 MINIMAP_WIDTH_PX = 500
@@ -172,7 +172,7 @@ def run_pipeline(
             try:
                 new_H = calibrator.get_homography(str(frame_path))
             except Exception as e:
-                print(f"      [WARN] Kalibracja klatki {frame_idx} rzucila wyjatek: {e}")
+                print(f"      [WARN] Kalibracja klatki {frame_idx} rzuciła wyjątek: {e}")
                 new_H = None
             t_calib_total += time.time() - t0
 

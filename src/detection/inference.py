@@ -12,36 +12,35 @@ import os
 from ultralytics import YOLO
 
 def generate_test_video():
-    # 1. Konfiguracja sciezek projektowych
+    # 1. Konfiguracja ścieżek projektowych
     project_root = os.getcwd()
     model_path = os.path.join(project_root, "models", "yolov8n", "trained_detection_yolov8n.pt")
     frames_dir = os.path.join(project_root, "data", "tracking_dataset", "tracking", "test", "SNMOT-123", "img1")
     output_video = os.path.join(project_root, "results", "tracking_test_output_new_2.mp4")
     
-    # Tworzenie katalogu wynikowego, jesli nie istnieje
+    # Utworzenie katalogu wynikowego.
     os.makedirs("results", exist_ok=True)
     
-    # 2. Inicjalizacja modelu wagami w formacie PyTorch
+    # 2. Inicjalizacja modelu lokalnymi wagami
     print(f"Ladowanie modelu z lokalizacji: {model_path}")
     model = YOLO(model_path)
     
-    # 3. Pobieranie i sortowanie listy klatek wejsciowych
+    # 3. Pobranie i sortowanie klatek wejściowych
     frames = [f for f in os.listdir(frames_dir) if f.endswith('.jpg')]
     frames.sort()
     
-    # Weryfikacja wymiarow obrazu na podstawie pierwszej klatki
+    # Rozmiar wyjścia wynika z pierwszej klatki.
     first_frame = cv2.imread(os.path.join(frames_dir, frames[0]))
     h, w, _ = first_frame.shape
     
-    # 4. Inicjalizacja obiektu VideoWriter do zapisu pliku wynikowego
-    # Wykorzystano kodek mp4v oraz standardowa predkosc 25 klatek na sekunde
+    # 4. Inicjalizacja zapisu MP4: kodek mp4v, 25 FPS.
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     fps = 25.0
     out = cv2.VideoWriter(output_video, fourcc, fps, (w, h))
     
     print(f"Rozpoczecie przetwarzania sekwencji: {len(frames)} klatek")
     
-    # 5. Petla przetwarzania sekwencyjnego i detekcji
+    # 5. Sekwencyjne przetwarzanie klatek i detekcja
     for i, frame_name in enumerate(frames):
         img_path = os.path.join(frames_dir, frame_name)
         

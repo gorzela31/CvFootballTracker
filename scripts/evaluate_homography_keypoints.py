@@ -65,7 +65,7 @@ KEYPOINT_CONF_THRESHOLD = 0.60
 # IMAGE -> PITCH, dlatego jednostka progu RANSAC to metry.
 RANSAC_REPROJ_THRESHOLD_M = 10.0
 
-# Siatka sluzy WYŁĄCZNIE do deterministycznego wyboru P1/P2.
+# Siatka służy wyłącznie do deterministycznego wyboru P1/P2.
 GRID_STEP_M = 5.0
 PITCH_MARGIN_M = 5.0
 IMAGE_MARGIN_PX = 5.0

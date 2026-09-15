@@ -64,7 +64,7 @@ PITCH_WIDTH_M = 68.0
 # Tak samo jak w pipeline.
 OPTIM_STEPS = 500
 
-# Siatka sluzy WYLACZNIE do deterministycznego wyboru P1/P2.
+# Siatka służy wyłącznie do deterministycznego wyboru P1/P2.
 GRID_STEP_M = 5.0
 PITCH_MARGIN_M = 5.0
 IMAGE_MARGIN_PX = 5.0

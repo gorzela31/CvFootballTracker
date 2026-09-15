@@ -84,7 +84,7 @@ class TeamClassifier:
         features = []
 
         for i in range(n):
-            if int(detections.class_id[i]) != 1:  # 1 = player
+            if int(detections.class_id[i]) != 1:
                 continue
 
             feat = self._extract_jersey_color(frame_bgr, detections.xyxy[i])

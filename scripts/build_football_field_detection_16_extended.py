@@ -114,8 +114,7 @@ PITCH_WIDTH_M = 68.0
 
 NUM_KEYPOINTS = 32
 
-# Nie odcinamy keypointów przy samej krawędzi z dużym marginesem.
-# 1 px chroni jedynie przed błędami numerycznymi.
+# Margines 1 px chroni przed błędami numerycznymi przy krawędzi obrazu.
 KEYPOINT_IMAGE_MARGIN_PX = 1.0
 
 # Do treningu dopuszczamy także wąskie kadry z małą liczbą punktów.

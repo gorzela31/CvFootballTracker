@@ -17,10 +17,10 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.rpn import AnchorGenerator
 
 
-# Klasy zgodne z modelem YOLO (dla spojnosci miedzy pipeline'ami)
+# Klasy zgodne z modelem YOLO.
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
 
-# Mapowanie COCO -> SoccerNet (dla trybu pretrained)
+# Mapowanie COCO -> SoccerNet dla trybu pretrained.
 COCO_TO_SOCCERNET = {
     1: 1,    # COCO 'person' -> SoccerNet 'player'
     37: 0,   # COCO 'sports ball' -> SoccerNet 'ball'
@@ -28,8 +28,8 @@ COCO_TO_SOCCERNET = {
 
 NUM_CLASSES = 4  # background + ball + player + referee
 
-# Konfiguracja kotwic zgodna z treningiem v3/v4 (przesun kotwice pod mala pilke)
-# Jesli trenujesz nowy model z innymi kotwicami, zmien ponizej:
+# Kotwice używane przy treningu v3/v4; mniejsze kotwice pomagają przy piłce.
+# Przy nowym treningu sprawdź zgodność tej konfiguracji z modelem.
 #_ANCHOR_SIZES  = ((16,), (32,), (64,), (128,), (256,))   # v3/v4
 _ANCHOR_SIZES = ((32,), (64,), (128,), (256,), (512,))  # domyslne torchvision (v2 i starsze)
 _ANCHOR_RATIOS = (0.5, 1.0, 2.0)

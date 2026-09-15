@@ -81,7 +81,7 @@ class PitchRenderer:
             dtype=np.uint8,
         )
 
-        # Powierzchnia boiska (lekko jasniejszy prostokat wewnetrzny)
+        # Powierzchnia boiska (nieco jaśniejszy prostokąt).
         tl = self.m_to_px(-PITCH_LENGTH_M / 2,  PITCH_WIDTH_M / 2)
         br = self.m_to_px( PITCH_LENGTH_M / 2, -PITCH_WIDTH_M / 2)
         cv2.rectangle(canvas, tl, br, self.COLOR_PITCH, thickness=-1)

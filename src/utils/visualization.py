@@ -185,7 +185,6 @@ class BirdEyeView:
             color = CLASS_COLORS.get(cls, DEFAULT_COLOR)
             conf = det.get("conf", 1.0)
  
-            # Koło zawodnika
             cv2.circle(img, (px, py), 7, color, -1)
             cv2.circle(img, (px, py), 8, (255, 255, 255), 1)
  

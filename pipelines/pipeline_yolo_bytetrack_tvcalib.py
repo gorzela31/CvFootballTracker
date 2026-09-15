@@ -13,7 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Dodaj root projektu do PYTHONPATH zeby importy 'src.*' dzialaly
+# Dodaj root projektu do PYTHONPATH, żeby działały importy `src.*`.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -34,12 +34,12 @@ from src.classification.team_classifier import TeamClassifier, annotate_frame_wi
 # ==========================================================================
 RUN_NAME = "pipeline_yolo_bt_tvcalib"
 
-# Sciezki wejsciowe
+# Ścieżki wejściowe
 FRAMES_DIR = PROJECT_ROOT / "data" / "tracking_dataset" / "tracking" / "test" / "SNMOT-123" / "img1"
 YOLO_WEIGHTS = PROJECT_ROOT / "models" / "yolov8n" / "trained_detection_yolov8n.pt"
 TVCALIB_WEIGHTS = PROJECT_ROOT / "src" / "calibration" / "tvcalib" / "data" / "segment_localization" / "train_59.pt"
 
-# Sciezki wyjsciowe
+# Ścieżki wyjściowe
 OUTPUT_DIR = PROJECT_ROOT / "results" / RUN_NAME
 _TS = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 OUTPUT_VIDEO = OUTPUT_DIR / f"{_TS}_output.mp4"
@@ -48,11 +48,9 @@ OUTPUT_CSV = OUTPUT_DIR / f"{_TS}_tracks.csv"
 # Parametry przetwarzania
 CONF_THRESHOLD = 0.10
 FPS = 25
-CALIB_STRIDE = 1   # co ile klatek liczona homografia
-                    # 1   = kazda klatka (najdokladniejsza projekcja)
-                    # 25  = co sekunde przy 25 fps
-                    # 750 = tylko pierwsza klatka (najszybsze przetwarzanie)
-OPTIM_STEPS = 500 # liczba krokow optymalizacji TVCalib (im wiecej, tym dokladniejsza ale wolniejsza kalibracja)
+CALIB_STRIDE = 1   # co ile klatek liczona jest homografia
+                    # 1 = każda klatka, 25 = co sekundę przy 25 FPS
+OPTIM_STEPS = 500  # liczba kroków optymalizacji TVCalib
 
 # Mapowanie klas (zgodne z modelem)
 CLASS_NAMES = {0: "ball", 1: "player", 2: "referee"}
@@ -112,7 +110,7 @@ def run_pipeline():
         raise FileNotFoundError(f"Brak klatek .jpg w {FRAMES_DIR}")
     print(f"[1/6] Znaleziono {len(frame_files)} klatek w {FRAMES_DIR.name}")
 
-    # Wymiary obrazu z pierwszej klatki
+    # Wymiary obrazu z pierwszej klatki.
     first_frame = cv2.imread(str(frame_files[0]))
     if first_frame is None:
         raise RuntimeError(f"Nie udalo sie wczytac {frame_files[0]}")
@@ -143,10 +141,9 @@ def run_pipeline():
 
     minimap_renderer = MinimapRenderer(width_px=MINIMAP_WIDTH_PX)
 
-    # Wymiary outputu = klatka + minimapa obok siebie (hstack)
     output_w = w + minimap_renderer.canvas_size[1]
     output_h = h
-    # Zaokraglenie do parzystej szerokosci - wymog kodekow H.264/MP4V
+    # Kodeki MP4 wymagają parzystej szerokości obrazu.
     output_w = output_w - (output_w % 2)
 
     # ---- 6. Petla po klatkach ----
@@ -159,8 +156,7 @@ def run_pipeline():
     n_calibrations_failed = 0
 
     for frame_idx, frame_path in enumerate(frame_files):
-        # Rekalibracja H co CALIB_STRIDE klatek.
-        # Przy nieudanej probie zachowywana jest ostatnia poprawna H.
+        # Przy nieudanej kalibracji zachowaj ostatnią poprawną H.
         if frame_idx % CALIB_STRIDE == 0:
             new_H = calibrator.get_homography(str(frame_path))
             if new_H is not None:
@@ -176,25 +172,20 @@ def run_pipeline():
 
         frame = cv2.imread(str(frame_path))
 
-        # Detekcja
         yolo_result = detector.predict(
             source=frame, conf=CONF_THRESHOLD, verbose=False, imgsz=960
         )[0]
         detections = sv.Detections.from_ultralytics(yolo_result)
 
-        # Tracking
         detections = tracker.update(detections)
 
-        # Klasyfikacja druzyn
         team_ids = team_classifier.classify(frame, detections)
 
-        # Projekcja na boisko
         dets_dict = sv_detections_to_dict_list(detections)
         for i, d in enumerate(dets_dict):
             d["team_id"] = int(team_ids[i])
         dets_projected = calibrator.project_detections_to_pitch(dets_dict, H)
 
-        # Zbieranie wierszy do CSV
         for d in dets_projected:
             pitch = d["pitch_coords"]
             csv_rows.append({
@@ -211,10 +202,8 @@ def run_pipeline():
                 "team_id": d.get("team_id", -1),
             })
 
-        # Anotacja klatki (bboxy kolorowane wg druzyny)
         annotated = annotate_frame_with_teams(frame, detections, team_ids, CLASS_NAMES)
 
-        # Render minimapy z pozycjami i paddingiem do wysokosci klatki
         minimap = minimap_renderer.render(
             dets_projected,
             frame_idx=frame_idx,
@@ -222,10 +211,8 @@ def run_pipeline():
             target_height=h,
         )
 
-        # Skladka: klatka + minimapa obok siebie
         composite = np.hstack([annotated, minimap])
 
-        # Trim do parzystej szerokosci (zgodnosc z output_w)
         if composite.shape[1] != output_w:
             composite = composite[:, :output_w]
 

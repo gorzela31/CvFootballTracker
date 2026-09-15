@@ -13,31 +13,24 @@ import os
 from SoccerNet.Downloader import SoccerNetDownloader
 
 def main():
-    # Pobieramy absolutną ścieżkę do folderu głównego projektu
     project_root = os.getcwd()
     
-    # Ustawiamy docelową ścieżkę: data/tracking_dataset
     data_dir = os.path.join(project_root, "data", "tracking_dataset")
     
-    # Tworzymy strukturę katalogów, jeśli nie istnieje
     os.makedirs(data_dir, exist_ok=True)
     
     print(f"Dane zostaną pobrane do: {data_dir}")
     
-    # Inicjalizacja oficjalnego downloadera ze wskazanym katalogiem
     myDownloader = SoccerNetDownloader(LocalDirectory=data_dir)
     
-    # ==========================================================
-    # USTAW BEZPIECZNIK: Odkomentuj (usuń '#') linijki poniżej, 
-    # aby wybrać, które zbiory chcesz teraz pobrać.
-    # ==========================================================
+    # Wybierz splity do pobrania. Pusta lista oznacza brak pobierania.
     splits_to_download = [
         # "train",  # Zbiór treningowy
         # "challenge",  # Zbiór walidacyjny
         # "test",   # Zbiór testowy
     ]
     
-    # Zabezpieczenie przed odpaleniem "pustego" skryptu
+    # Nie pobieraj niczego bez jawnie wybranych splitów.
     if not splits_to_download:
         print("\n UWAGA: Nic nie wybrano!")
         print("Musisz odkomentować przynajmniej jeden zbiór (train, valid lub test) w kodzie skryptu.")
